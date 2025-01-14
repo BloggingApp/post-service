@@ -1,0 +1,4 @@
+.env
+*.sql
+TODO.txt
+public/*
