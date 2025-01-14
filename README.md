@@ -1,2 +1,2 @@
 # post-service
-Post microservice in BlogginApp
+Post microservice in BloggingApp
