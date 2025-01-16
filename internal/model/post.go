@@ -12,17 +12,18 @@ type Post struct {
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
 	Views     int64     `json:"views"`
+	Likes     int64     `json:"likes"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type FullPost struct {
-	Post     Post            `json:"post"`
-	Author   UserAuthor      `json:"author"`
-	Hashtags map[string]bool `json:"hashtags"`
+	Post   Post       `json:"post"`
+	Author UserAuthor `json:"author"`
+	Tags   []string   `json:"tags"`
 }
 
-type UserPost struct {
-	Post     Post            `json:"post"`
-	Hashtags map[string]bool `json:"hashtags"`
+type AuthorPost struct {
+	Post Post     `json:"post"`
+	Tags []string `json:"tags"`
 }

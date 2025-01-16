@@ -48,7 +48,9 @@ func (r *commentRepo) FindPostComments(ctx context.Context, postID int64, limit 
 		JOIN cached_users u ON c.author_id = u.id
 		WHERE c.post_id = $1
 		LIMIT $2
-		OFFSET $3`,
+		OFFSET $3
+		ORDER BY c.likes DESC
+		ORDER BY c.created_at DESC`,
 		postID,
 		limit,
 		offset,
@@ -96,7 +98,9 @@ func (r *commentRepo) FindCommentReplies(ctx context.Context, commentID int64, l
 		JOIN cached_users u ON c.author_id = u.id
 		WHERE c.parent_id = $1
 		LIMIT $2
-		OFFSET $3`,
+		OFFSET $3
+		ORDER BY c.likes DESC
+		ORDER BY c.created_at DESC`,
 		commentID,
 		limit,
 		offset,

@@ -19,7 +19,7 @@ func maxLimit(limit *int) {
 type Post interface {
 	Create(ctx context.Context, post model.Post) (*model.Post, error)
 	FindByID(ctx context.Context, id int64) (*model.FullPost, error)
-	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.UserPost, error)
+	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
 }
 
 type Comment interface {
