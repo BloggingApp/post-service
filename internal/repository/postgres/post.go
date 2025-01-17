@@ -19,15 +19,22 @@ func newPostRepo(db *pgx.Conn) Post {
 	}
 }
 
-func (r *postRepo) Create(ctx context.Context, post model.Post) (*model.Post, error) {
+func (r *postRepo) Create(ctx context.Context, post model.Post, images []*model.PostImage) (*model.Post, error) {
 	now := time.Now()
 	post.CreatedAt = now
 	post.UpdatedAt = now
 	post.Views = 0
 	post.Likes = 0
-	if err := r.db.QueryRow(
+
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	if err := tx.QueryRow(
 		ctx,
-		"INSERT INTO posts(author_id, title, content, views, likes) VALUES($1, $2, $3, $4, $5) RETURNS id",
+		"INSERT INTO posts(author_id, title, content, views, likes) VALUES($1, $2, $3, $4, $5) RETURNING id",
 		post.AuthorID,
 		post.Title,
 		post.Content,
@@ -36,7 +43,18 @@ func (r *postRepo) Create(ctx context.Context, post model.Post) (*model.Post, er
 	).Scan(&post.ID); err != nil {
 		return nil, err
 	}
-	
+
+	for _, img := range images {
+		_, err := tx.Exec(ctx, "INSERT INTO post_images(post_id, url, position) VALUES($1, $2, $3)", post.ID, img.URL, img.Position)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
 	return &post, nil
 }
 
@@ -70,6 +88,8 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 			username string
 			displayName *string
 			avatarURL *string
+			imageURL *string
+			imagePosition *int
 			tag *string
 		)
 		if err := rows.Scan(
@@ -84,6 +104,8 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 			&username,
 			&displayName,
 			&avatarURL,
+			&imageURL,
+			&imagePosition,
 			&tag,
 		); err != nil {
 			return nil, err
@@ -106,9 +128,14 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 					DisplayName: displayName,
 					AvatarURL: avatarURL,
 				},
+				Images: []*model.PostImage{},
 				Tags: []string{},
 			}
 			postMap[post.Post.ID] = post
+		}
+
+		if imageURL != nil && imagePosition != nil {
+			postMap[post.Post.ID].Images = append(postMap[post.Post.ID].Images, &model.PostImage{URL: *imageURL, Position: *imagePosition})
 		}
 
 		if tag != nil {
@@ -164,6 +191,8 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 			likes int64
 			createdAt time.Time
 			updatedAt time.Time
+			imageURL *string
+			imagePosition *int
 			tag *string
 		)
 		if err := rows.Scan(
@@ -175,6 +204,8 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 			&likes,
 			&createdAt,
 			&updatedAt,
+			&imageURL,
+			&imagePosition,
 			&tag,
 		); err != nil {
 			return nil, err
@@ -193,9 +224,14 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
 				},
+				Images: []*model.PostImage{},
 				Tags: []string{},
 			}
 			postsMap[post.Post.ID] = post
+		}
+
+		if imageURL != nil && imagePosition != nil {
+			postsMap[post.Post.ID].Images = append(postsMap[post.Post.ID].Images, &model.PostImage{URL: *imageURL, Position: *imagePosition})
 		}
 
 		if tag != nil {
@@ -228,6 +264,7 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, t.tag
 		FROM posts p
 		JOIN cached_users u ON p.author_id = u.id
+		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
 		WHERE t.tag = ANY($1)
 		LIMIT $2
@@ -258,6 +295,8 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 			username string
 			displayName *string
 			avatarURL *string
+			imageURL *string
+			imagePosition *int
 			tag *string
 		)
 		if err := rows.Scan(
@@ -272,6 +311,8 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 			&username,
 			&displayName,
 			&avatarURL,
+			&imageURL,
+			&imagePosition,
 			&tag,
 		); err != nil {
 			return nil, err
@@ -295,9 +336,14 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 					DisplayName: displayName,
 					AvatarURL: avatarURL,
 				},
+				Images: []*model.PostImage{},
 				Tags: []string{},
 			}
 			postsMap[id] = post
+		}
+
+		if imageURL != nil && imagePosition != nil {
+			postsMap[post.Post.ID].Images = append(postsMap[post.Post.ID].Images, &model.PostImage{URL: *imageURL, Position: *imagePosition})
 		}
 
 		if tag != nil {

@@ -24,7 +24,7 @@ func (r *commentRepo) Create(ctx context.Context, comment model.Comment) (*model
 	comment.Likes = 0
 	if err := r.db.QueryRow(
 		ctx,
-		"INSERT INTO comments(parent_id, post_id, author_id, content, likes) VALUES($1, $2, $3, $4, $5) RETURNS id",
+		"INSERT INTO comments(parent_id, post_id, author_id, content, likes) VALUES($1, $2, $3, $4, $5) RETURNING id",
 		comment.ParentID,
 		comment.PostID,
 		comment.AuthorID,

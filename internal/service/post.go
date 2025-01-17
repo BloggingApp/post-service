@@ -25,8 +25,8 @@ func newPostService(logger *zap.Logger, repo *repository.Repository) Post {
 	}
 }
 
-func (s *postService) Create(ctx context.Context, post model.Post) (*model.Post, error) {
-	createdPost, err := s.repo.Postgres.Post.Create(ctx, post)
+func (s *postService) Create(ctx context.Context, post model.Post, images []*model.PostImage) (*model.Post, error) {
+	createdPost, err := s.repo.Postgres.Post.Create(ctx, post, images)
 	if err != nil {
 		s.logger.Sugar().Errorf("failed to create user(%s) post: %s", post.AuthorID.String(), err.Error())
 		return nil, ErrInternal
