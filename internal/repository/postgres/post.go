@@ -320,3 +320,8 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 
 	return posts, nil
 }
+
+func (r *postRepo) IncrViews(ctx context.Context, id int64) error {
+	_, err := r.db.Exec(ctx, "UPDATE posts SET views = views + 1 WHERE id = $1", id)
+	return err
+}
