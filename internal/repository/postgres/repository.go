@@ -29,14 +29,22 @@ type Comment interface {
 	Delete(ctx context.Context, commentID int64, authorID uuid.UUID) error
 }
 
+type UserCache interface {
+	Create(ctx context.Context, cachedUser model.CachedUser) error
+	Update(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
+	FindByID(ctx context.Context, id uuid.UUID) (*model.CachedUser, error)
+}
+
 type PostgresRepository struct {
 	Post
 	Comment
+	UserCache
 }
 
 func New(db *pgx.Conn) *PostgresRepository {
 	return &PostgresRepository{
 		Post: newPostRepo(db),
 		Comment: newCommentRepo(db),
+		UserCache: newUserCacheRepo(db),
 	}
 }
