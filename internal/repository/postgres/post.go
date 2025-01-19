@@ -19,7 +19,7 @@ func newPostRepo(db *pgx.Conn) Post {
 	}
 }
 
-func (r *postRepo) Create(ctx context.Context, post model.Post, images []*model.PostImage) (*model.Post, error) {
+func (r *postRepo) Create(ctx context.Context, post model.Post, images []*model.PostImage, tags []string) (*model.Post, error) {
 	now := time.Now()
 	post.CreatedAt = now
 	post.UpdatedAt = now
@@ -46,6 +46,13 @@ func (r *postRepo) Create(ctx context.Context, post model.Post, images []*model.
 
 	for _, img := range images {
 		_, err := tx.Exec(ctx, "INSERT INTO post_images(post_id, url, position) VALUES($1, $2, $3)", post.ID, img.URL, img.Position)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, tag := range tags {
+		_, err := tx.Exec(ctx, "INSERT INTO post_tags(post_id, tag) VALUES($1, $2)", post.ID, tag)
 		if err != nil {
 			return nil, err
 		}

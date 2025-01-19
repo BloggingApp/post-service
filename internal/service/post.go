@@ -2,14 +2,22 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/BloggingApp/post-service/internal/dto"
 	"github.com/BloggingApp/post-service/internal/model"
 	"github.com/BloggingApp/post-service/internal/repository"
 	"github.com/BloggingApp/post-service/internal/repository/redisrepo"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -25,8 +33,54 @@ func newPostService(logger *zap.Logger, repo *repository.Repository) Post {
 	}
 }
 
-func (s *postService) Create(ctx context.Context, post model.Post, images []*model.PostImage) (*model.Post, error) {
-	createdPost, err := s.repo.Postgres.Post.Create(ctx, post, images)
+func (s *postService) Create(ctx context.Context, authorID uuid.UUID, dto dto.CreatePostDto, imagesDto []dto.CreatePostImagesDto) (*model.Post, error) {
+	post := model.Post{
+		AuthorID: authorID,
+		Title: dto.Title,
+		Content: dto.Content,
+	}
+
+	var images []*model.PostImage
+	for _, img := range imagesDto {
+		file, err := img.FileHeader.Open()
+		if err != nil {
+			s.logger.Sugar().Errorf("failed to open file: %s", err.Error())
+			return nil, ErrInternal
+		}
+		defer file.Close()
+
+		buff := make([]byte, 512)
+		if _, err := file.Read(buff); err != nil {
+			s.logger.Sugar().Errorf("error while creating a post for user(%s): %s", authorID.String())
+			return nil, ErrInternal
+		}
+	
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			s.logger.Sugar().Errorf("error while creating a post for user(%s): %s", authorID.String(), err.Error())
+			return nil, ErrInternal
+		}
+	
+		if !strings.HasPrefix(http.DetectContentType(buff), "image/") {
+			return nil, ErrFileMustBeImage
+		}
+
+		ext := filepath.Ext(img.FileHeader.Filename)
+		if ext == "" {
+			return nil, ErrFileMustHaveAValidExtension
+		}
+
+		imgID := uuid.New()
+		filePath := "public/post-images/" + imgID.String() + ext
+		if _,err := os.Create(filePath); err != nil {
+			s.logger.Sugar().Errorf("failed to create file for author(%s) post image: %s", authorID.String(), err.Error())
+			return nil, ErrInternal
+		}
+
+		imgURL := fmt.Sprintf("%s/%s", viper.GetString("app.url"), filePath)
+		images = append(images, &model.PostImage{URL: imgURL, Position: img.Position})
+	}
+
+	createdPost, err := s.repo.Postgres.Post.Create(ctx, post, images, dto.Tags)
 	if err != nil {
 		s.logger.Sugar().Errorf("failed to create user(%s) post: %s", post.AuthorID.String(), err.Error())
 		return nil, ErrInternal
