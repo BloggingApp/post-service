@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -57,42 +58,47 @@ func (s *userCacheService) CreateOrGet(ctx context.Context, id uuid.UUID, access
 }
 
 func (s *userCacheService) fetchUser(ctx context.Context, accessToken string) (*model.CachedUser, error) {
-	endpoint := "/users/@me"
-	url := viper.GetString("user-service.api") + endpoint
+    endpoint := "/users/@me"
+    url := viper.GetString("user-service.api") + endpoint
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
+    req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+    if err != nil {
         s.logger.Sugar().Errorf("failed to create request to user-service: %s", err.Error())
         return nil, ErrInternal
     }
 
-	req.Header.Add("Authorization", "Bearer " + accessToken)
+    req.Header.Add("Authorization", "Bearer "+accessToken)
 
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		s.logger.Sugar().Errorf("failed to send request to user-service: %s", err.Error())
-		return nil, ErrInternal
-	}
-	defer resp.Body.Close()
+    resp, err := s.httpClient.Do(req)
+    if err != nil {
+        s.logger.Sugar().Errorf("failed to send request to user-service: %s", err.Error())
+        return nil, ErrInternal
+    }
+    defer resp.Body.Close()
 
-	var bodyJSON map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&bodyJSON); err != nil {
-		s.logger.Sugar().Errorf("failed to decode response body from user-service: %s", err.Error())
-		return nil, ErrInternal
-	}
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        s.logger.Sugar().Errorf("failed to read response body from user-service: %s", err.Error())
+        return nil, ErrInternal
+    }
 
-	if resp.StatusCode != http.StatusOK || !bodyJSON["ok"].(bool) {
-		s.logger.Sugar().Errorf("ERROR from user-service endpoint(%s), details: %s", endpoint, bodyJSON["details"].(string))
-		return nil, errors.New(bodyJSON["details"].(string))
-	}
+    if resp.StatusCode != http.StatusOK {
+        var bodyJSON map[string]interface{}
+        if err := json.Unmarshal(body, &bodyJSON); err != nil {
+            s.logger.Sugar().Errorf("failed to decode error response from user-service: %s", err.Error())
+        } else {
+            s.logger.Sugar().Errorf("ERROR from user-service endpoint(%s), details: %s", endpoint, bodyJSON["details"])
+        }
+        return nil, errors.New("failed to fetch user")
+    }
+	
+    var user model.CachedUser
+    if err := json.Unmarshal(body, &user); err != nil {
+        s.logger.Sugar().Errorf("failed to decode user response body from user-service: %s", err.Error())
+        return nil, ErrInternal
+    }
 
-	var user model.CachedUser
-	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
-		s.logger.Sugar().Errorf("failed to decode user response body from user-service: %s", err.Error())
-		return nil, ErrInternal
-	}
-
-	return &user, nil
+    return &user, nil
 }
 
 func (s *userCacheService) Create(ctx context.Context, cachedUser model.CachedUser) error {
