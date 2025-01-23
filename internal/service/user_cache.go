@@ -181,6 +181,11 @@ func (s *userCacheService) consumeUserUpdates(ctx context.Context) {
 
 		delete(data, "user_id")
 
+		if len(data) == 0 {
+			msg.Ack(false)
+			continue
+		}
+
 		if err := s.Update(ctx, userID, data); err != nil {
 			msg.Nack(false, true)
 			continue

@@ -84,6 +84,8 @@ func main() {
 		}
 	}(*srv, serverConfig)
 
+	go services.StartConsumeAll(ctx)
+
 	logger.Info("Server started")
 
 	quit := make(chan os.Signal, 1)
