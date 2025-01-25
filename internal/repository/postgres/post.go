@@ -69,9 +69,10 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 	rows, err := r.db.Query(
 		ctx,
 		`SELECT
-		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, t.tag
+		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
 		FROM posts p
 		JOIN cached_users u ON p.author_id = u.id
+		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
 		WHERE p.id = $1`,
 		id,
@@ -172,10 +173,11 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 	rows, err := r.db.Query(
 		ctx,
 		`SELECT
-		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, t.tag
+		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, i.url, i.position, t.tag
 		FROM posts p
+		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
-		WHERE p.authorID = $1
+		WHERE p.author_id = $1
 		LIMIT $2
 		OFFSET $3`,
 		authorID,

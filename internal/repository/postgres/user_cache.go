@@ -51,10 +51,14 @@ func (r *userCacheRepo) Update(ctx context.Context, id uuid.UUID, updates map[st
 		i++
 	}
 
-	query = query[:len(query)-2] + " WHERE id = $" + strconv.Itoa(i)
+	query = query[:len(query)-2] + " WHERE id = $" + strconv.Itoa(i) + " RETURNING id"
 	args = append(args, id)
 
-	_, err := r.db.Exec(ctx, query, args...)
+	var returnedID uuid.UUID
+	err := r.db.QueryRow(ctx, query, args...).Scan(&returnedID)
+	if err == pgx.ErrNoRows {
+		return nil
+	}
 	return err
 }
 

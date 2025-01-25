@@ -92,6 +92,9 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, dto dto.Cr
 func (s *postService) FindByID(ctx context.Context, id int64) (*model.FullPost, error) {
 	cachedPost, err := redisrepo.Get[model.FullPost](s.repo.Redis.Default, ctx, redisrepo.PostKey(id))
 	if err == nil {
+		if cachedPost != nil {
+			s.incrViewsIfPostIsNotNil(cachedPost.Post.ID)
+		}
 		return cachedPost, nil
 	}
 	if err != redis.Nil {
@@ -110,13 +113,20 @@ func (s *postService) FindByID(ctx context.Context, id int64) (*model.FullPost, 
 		return nil, ErrInternal
 	}
 
-	go func(ctx context.Context, s *postService, postID int64) {
-		if err := s.repo.Postgres.Post.IncrViews(ctx, id); err != nil {
-			s.logger.Sugar().Errorf("failed to increment views for post(%d): %s", postID, err.Error())
-		}
-	}(ctx, s, id)
+	if post != nil {
+		go s.incrViewsIfPostIsNotNil(post.Post.ID)
+	}
 
 	return post, nil
+}
+
+func (s *postService) incrViewsIfPostIsNotNil(postID int64) {
+	go func(id int64) {
+		ctx := context.Background()
+		if err := s.repo.Postgres.Post.IncrViews(ctx, id); err != nil {
+			s.logger.Sugar().Errorf("failed to increment views for post(%d): %s", id, err.Error())
+		}
+	}(postID)
 }
 
 func (s *postService) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error) {
