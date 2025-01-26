@@ -46,11 +46,10 @@ func (r *commentRepo) FindPostComments(ctx context.Context, postID int64, limit 
 		c.id, c.post_id, c.author_id, c.content, c.likes, c.created_at, u.username, u.display_name, u.avatar_url
 		FROM comments c
 		JOIN cached_users u ON c.author_id = u.id
-		WHERE c.post_id = $1
+		WHERE c.post_id = $1 AND c.parent_id IS NULL
+		ORDER BY c.likes DESC, c.created_at DESC
 		LIMIT $2
-		OFFSET $3
-		ORDER BY c.likes DESC
-		ORDER BY c.created_at DESC`,
+		OFFSET $3`,
 		postID,
 		limit,
 		offset,
@@ -87,7 +86,7 @@ func (r *commentRepo) FindPostComments(ctx context.Context, postID int64, limit 
 	return comments, nil
 }
 
-func (r *commentRepo) FindCommentReplies(ctx context.Context, commentID int64, limit int, offset int) ([]*model.FullComment, error) {
+func (r *commentRepo) FindCommentReplies(ctx context.Context, postID int64, commentID int64, limit int, offset int) ([]*model.FullComment, error) {
 	maxLimit(&limit)
 
 	rows, err := r.db.Query(
@@ -96,11 +95,11 @@ func (r *commentRepo) FindCommentReplies(ctx context.Context, commentID int64, l
 		c.id, c.parent_id, c.post_id, c.author_id, c.content, c.likes, c.created_at, u.username, u.display_name, u.avatar_url
 		FROM comments c
 		JOIN cached_users u ON c.author_id = u.id
-		WHERE c.parent_id = $1
-		LIMIT $2
-		OFFSET $3
-		ORDER BY c.likes DESC
-		ORDER BY c.created_at DESC`,
+		WHERE c.post_id = $1 AND c.parent_id = $2
+		ORDER BY c.likes DESC, c.created_at DESC
+		LIMIT $3
+		OFFSET $4`,
+		postID,
 		commentID,
 		limit,
 		offset,
@@ -138,7 +137,7 @@ func (r *commentRepo) FindCommentReplies(ctx context.Context, commentID int64, l
 	return comments, nil
 }
 
-func (r *commentRepo) Delete(ctx context.Context, commentID int64, authorID uuid.UUID) error {
-	_, err := r.db.Exec(ctx, "DELETE FROM comments WHERE id = $1 AND author_id = $2", commentID, authorID)
+func (r *commentRepo) Delete(ctx context.Context, postID int64, commentID int64, authorID uuid.UUID) error {
+	_, err := r.db.Exec(ctx, "DELETE FROM comments WHERE post_id = $1 AND id = $2 AND author_id = $3", postID, commentID, authorID)
 	return err
 }

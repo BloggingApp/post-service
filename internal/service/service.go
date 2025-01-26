@@ -26,7 +26,10 @@ type Post interface {
 }
 
 type Comment interface {
-
+	Create(ctx context.Context, authorID uuid.UUID, dto dto.CreateCommentDto) (*model.Comment, error)
+	FindPostComments(ctx context.Context, postID int64, limit int, offset int) ([]*model.FullComment, error)
+	FindCommentReplies(ctx context.Context, postID int64, commentID int64, limit int, offset int) ([]*model.FullComment, error)
+	Delete(ctx context.Context, postID int64, commentID int64, authorID uuid.UUID) error
 }
 
 type UserCache interface {
@@ -39,12 +42,14 @@ type UserCache interface {
 
 type Service struct {
 	Post
+	Comment
 	UserCache
 }
 
 func New(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn) *Service {
 	return &Service{
 		Post: newPostService(logger, repo),
+		Comment: newCommentService(logger, repo),
 		UserCache: newUserCacheService(logger, repo, rabbitmq),
 	}
 }

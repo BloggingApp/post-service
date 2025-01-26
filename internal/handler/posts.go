@@ -50,15 +50,10 @@ func (h *Handler) postsCreate(c *gin.Context) {
 	c.JSON(http.StatusCreated, *createdPost)
 }
 
-type postsGetReq struct {
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
-}
-
 func (h *Handler) postsGetMy(c *gin.Context) {
 	user := h.getCachedUserFromRequest(c)
 
-	var input postsGetReq
+	var input dto.GetPostsDto
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
 		return
@@ -91,7 +86,7 @@ func (h *Handler) postsGetOne(c *gin.Context) {
 }
 
 func (h *Handler) postsGet(c *gin.Context) {
-	var input postsGetReq
+	var input dto.GetPostsDto
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
 		return

@@ -27,8 +27,8 @@ type Post interface {
 type Comment interface {
 	Create(ctx context.Context, comment model.Comment) (*model.Comment, error)
 	FindPostComments(ctx context.Context, postID int64, limit int, offset int) ([]*model.FullComment, error)
-	FindCommentReplies(ctx context.Context, commentID int64, limit int, offset int) ([]*model.FullComment, error)
-	Delete(ctx context.Context, commentID int64, authorID uuid.UUID) error
+	FindCommentReplies(ctx context.Context, postID int64, commentID int64, limit int, offset int) ([]*model.FullComment, error)
+	Delete(ctx context.Context, postID int64, commentID int64, authorID uuid.UUID) error
 }
 
 type UserCache interface {
