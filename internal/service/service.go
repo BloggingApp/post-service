@@ -23,6 +23,7 @@ type Post interface {
 	Create(ctx context.Context, authorID uuid.UUID, dto dto.CreatePostDto, images []dto.CreatePostImagesDto) (*model.Post, error)
 	FindByID(ctx context.Context, id int64) (*model.FullPost, error)
 	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
+	FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error)
 }
 
 type Comment interface {

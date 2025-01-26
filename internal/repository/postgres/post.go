@@ -178,6 +178,7 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
 		WHERE p.author_id = $1
+		ORDER BY p.created_at DESC
 		LIMIT $2
 		OFFSET $3`,
 		authorID,
@@ -270,17 +271,15 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 	rows, err := r.db.Query(
 		ctx,
 		`SELECT
-		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, t.tag
+		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
 		FROM posts p
 		JOIN cached_users u ON p.author_id = u.id
 		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
 		WHERE t.tag = ANY($1)
+		ORDER BY p.likes DESC, p.views DESC, p.created_at DESC
 		LIMIT $2
-		OFFSET $3
-		ORDER BY p.likes DESC
-		ORDER BY p.views DESC
-		ORDER BY p.created_at DESC`,
+		OFFSET $3`,
 		tags,
 		limit,
 		offset,
@@ -379,4 +378,148 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 func (r *postRepo) IncrViews(ctx context.Context, id int64) error {
 	_, err := r.db.Exec(ctx, "UPDATE posts SET views = views + 1 WHERE id = $1", id)
 	return err
+}
+
+func (r *postRepo) Like(ctx context.Context, postID int64, userID uuid.UUID) error {
+	if _, err := r.db.Exec(ctx, "INSERT INTO post_likes(post_id, user_id) VALUES($1, $2)", postID, userID); err != nil {
+		return err
+	}
+
+	if _, err := r.db.Exec(ctx, "UPDATE posts SET likes = likes + 1 WHERE id = $1", postID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *postRepo) Unlike(ctx context.Context, postID int64, userID uuid.UUID) error {
+	if _, err := r.db.Exec(ctx, "DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2", postID, userID); err != nil {
+		return err
+	}
+
+	if _, err := r.db.Exec(ctx, "UPDATE posts SET likes = likes - 1 WHERE id = $1", postID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *postRepo) IsLiked(ctx context.Context, userID uuid.UUID, postID int64) bool {
+	var isLiked bool
+	if err := r.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM post_likes l WHERE l.user_id = $1 AND l.post_id = $2)", userID, postID).Scan(&isLiked); err != nil {
+		return false
+	}
+
+	return isLiked
+}
+
+func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error) {
+	maxLimit(&limit)
+
+	rows, err := r.db.Query(
+		ctx,
+		`SELECT
+		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
+		FROM post_likes l
+		JOIN posts p ON l.post_id = p.id
+		JOIN cached_users u ON p.author_id = u.id
+		LEFT JOIN post_images i ON p.id = i.post_id
+		LEFT JOIN post_tags t ON p.id = t.post_id
+		WHERE l.user_id = $1
+		ORDER BY l.created_at DESC
+		LIMIT $2
+		OFFSET $3`,
+		userID,
+		limit,
+		offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	postsMap := make(map[int64]*model.FullPost)
+	for rows.Next() {
+		var (
+			id int64
+			authorID uuid.UUID
+			title string
+			content string
+			views int64
+			likes int64
+			createdAt time.Time
+			updatedAt time.Time
+			username string
+			displayName *string
+			avatarURL *string
+			imageURL *string
+			imagePosition *int
+			tag *string
+		)
+		if err := rows.Scan(
+			&id,
+			&authorID,
+			&title,
+			&content,
+			&views,
+			&likes,
+			&createdAt,
+			&updatedAt,
+			&username,
+			&displayName,
+			&avatarURL,
+			&imageURL,
+			&imagePosition,
+			&tag,
+		); err != nil {
+			return nil, err
+		}
+
+		post, exists := postsMap[id]
+		if !exists {
+			post = &model.FullPost{
+				Post: model.Post{
+					ID: id,
+					AuthorID: authorID,
+					Title: title,
+					Content: content,
+					Views: views,
+					Likes: likes,
+					CreatedAt: createdAt,
+					UpdatedAt: updatedAt,
+				},
+				Author: model.UserAuthor{
+					Username: username,
+					DisplayName: displayName,
+					AvatarURL: avatarURL,
+				},
+				Images: []*model.PostImage{},
+				Tags: []string{},
+			}
+			postsMap[id] = post
+		}
+
+		if imageURL != nil && imagePosition != nil {
+			postsMap[post.Post.ID].Images = append(postsMap[post.Post.ID].Images, &model.PostImage{URL: *imageURL, Position: *imagePosition})
+		}
+
+		if tag != nil {
+			postsMap[post.Post.ID].Tags = append(postsMap[post.Post.ID].Tags, *tag)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var posts []*model.FullPost
+	for _, post := range postsMap {
+		posts = append(posts, post)
+	}
+
+	if len(posts) == 0 {
+		return nil, pgx.ErrNoRows
+	}
+
+	return posts, nil
 }

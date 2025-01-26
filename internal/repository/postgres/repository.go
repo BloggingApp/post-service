@@ -22,6 +22,10 @@ type Post interface {
 	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
 	SearchByTags(ctx context.Context, tags []string, limit int, offset int) ([]*model.FullPost, error)
 	IncrViews(ctx context.Context, id int64) error
+	Like(ctx context.Context, postID int64, userID uuid.UUID) error
+	Unlike(ctx context.Context, postID int64, userID uuid.UUID) error
+	IsLiked(ctx context.Context, userID uuid.UUID, postID int64) bool
+	FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error)
 }
 
 type Comment interface {

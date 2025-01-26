@@ -154,3 +154,29 @@ func (s *postService) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, l
 
 	return posts, nil
 }
+
+func (s *postService) FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error) {
+	maxLimit(&limit)
+
+	postsCache, err := redisrepo.GetMany[model.FullPost](s.repo.Redis.Default, ctx, redisrepo.UserLikesKey(userID.String(), limit, offset))
+	if err == nil {
+		return postsCache, nil
+	}
+	if err != redis.Nil {
+		s.logger.Sugar().Errorf("failed to get user(%s) likes from redis: %s", userID.String(), err.Error())
+		return nil, ErrInternal
+	}
+
+	posts, err := s.repo.Postgres.Post.FindUserLikes(ctx, userID, limit, offset)
+	if err != nil && err != pgx.ErrNoRows {
+		s.logger.Sugar().Errorf("failed to get user(%s) likes from postgres: %s", userID.String(), err.Error())
+		return nil, ErrInternal
+	}
+
+	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.UserLikesKey(userID.String(), limit, offset), posts, time.Hour); err != nil {
+		s.logger.Sugar().Errorf("failed to set user(%s) likes in redis: %s", userID.String(), err.Error())
+		return nil, ErrInternal
+	}
+
+	return posts, nil
+}

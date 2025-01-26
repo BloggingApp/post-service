@@ -8,6 +8,7 @@ const (
 	USER_CACHE_KEY = "user-cache:%s" // <userID>
 	POST_COMMENTS_KEY = "post:%d-comments:%d:%d" // <postID>:<limit>:<offset>
 	COMMENT_REPLIES_KEY = "post:%d-comment:%d-replies:%d:%d" // <postID>:<commentID>:<limit>:<offset>
+	USER_LIKES_KEY = "user:%s-likes:%d:%d" // <userID>:<limit>:<offset>
 )
 
 func PostKey(postID int64) string {
@@ -28,4 +29,8 @@ func PostCommentsKey(postID int64, limit int, offset int) string {
 
 func CommentRepliesKey(postID int64, commentID int64, limit int, offset int) string {
 	return fmt.Sprintf(COMMENT_REPLIES_KEY, postID, commentID, limit, offset)
+}
+
+func UserLikesKey(userID string, limit int, offset int) string {
+	return fmt.Sprintf(USER_LIKES_KEY, userID, limit, offset)
 }
