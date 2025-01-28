@@ -121,7 +121,7 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 
 		post, exists := postMap[id]
 		if !exists {
-			post := &model.FullPost{
+			post = &model.FullPost{
 				Post: model.Post{
 					ID: id,
 					AuthorID: authorID,

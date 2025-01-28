@@ -1,13 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
-	"fmt"
+	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/BloggingApp/post-service/internal/dto"
@@ -24,12 +23,14 @@ import (
 type postService struct {
 	logger *zap.Logger
 	repo *repository.Repository
+	httpClient *http.Client
 }
 
 func newPostService(logger *zap.Logger, repo *repository.Repository) Post {
 	return &postService{
 		logger: logger,
 		repo: repo,
+		httpClient: &http.Client{},
 	}
 }
 
@@ -49,35 +50,14 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, dto dto.Cr
 		}
 		defer file.Close()
 
-		buff := make([]byte, 512)
-		if _, err := file.Read(buff); err != nil {
-			s.logger.Sugar().Errorf("error while creating a post for user(%s): %s", authorID.String())
-			return nil, ErrInternal
-		}
-	
-		if _, err := file.Seek(0, io.SeekStart); err != nil {
-			s.logger.Sugar().Errorf("error while creating a post for user(%s): %s", authorID.String(), err.Error())
-			return nil, ErrInternal
-		}
-	
-		if !strings.HasPrefix(http.DetectContentType(buff), "image/") {
-			return nil, ErrFileMustBeImage
+		uploadPath := "post-images"
+
+		returnedURL, err := s.uploadImageToCDN(uploadPath, file, img.FileHeader)
+		if err != nil {
+			return nil, err
 		}
 
-		ext := filepath.Ext(img.FileHeader.Filename)
-		if ext == "" {
-			return nil, ErrFileMustHaveAValidExtension
-		}
-
-		imgID := uuid.New()
-		filePath := "public/post-images/" + imgID.String() + ext
-		if _,err := os.Create(filePath); err != nil {
-			s.logger.Sugar().Errorf("failed to create file for author(%s) post image: %s", authorID.String(), err.Error())
-			return nil, ErrInternal
-		}
-
-		imgURL := fmt.Sprintf("%s/%s", viper.GetString("app.url"), filePath)
-		images = append(images, &model.PostImage{URL: imgURL, Position: img.Position})
+		images = append(images, &model.PostImage{URL: returnedURL, Position: img.Position})
 	}
 
 	createdPost, err := s.repo.Postgres.Post.Create(ctx, post, images, dto.Tags)
@@ -87,6 +67,74 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, dto dto.Cr
 	}
 
 	return createdPost, nil
+}
+
+func (s *postService) uploadImageToCDN(path string, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
+	endpoint := "/upload"
+	url := viper.GetString("cdn.origin") + endpoint
+
+	var requestBody bytes.Buffer
+	writer := multipart.NewWriter(&requestBody)
+
+	fileWriter, err := writer.CreateFormFile("file", fileHeader.Filename)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to create file part for CDN request: %s", err.Error())
+		return "", ErrInternal
+	}
+
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		s.logger.Sugar().Errorf("failed to seek to the start of the file: %s", err.Error())
+		return "", ErrInternal
+	}
+
+	if _, err := io.Copy(fileWriter, file); err != nil {
+		s.logger.Sugar().Errorf("failed to copy file content for CDN request: %s", err.Error())
+		return "", ErrInternal
+	}
+
+	if err := writer.WriteField("path", path); err != nil {
+		s.logger.Sugar().Errorf("failed to write path field for CDN request: %s", err.Error())
+		return "", ErrInternal
+	}
+
+	if err := writer.Close(); err != nil {
+		s.logger.Sugar().Errorf("failed to close writer for CDN request: %s", err.Error())
+		return "", ErrInternal
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, &requestBody)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to create CDN request: %s", err.Error())
+		return "", ErrInternal
+	}
+
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Add("type", "IMAGE")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to do CDN request: %s", err.Error())
+		return "", ErrInternal
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to read response body from CDN: %s", err.Error())
+		return "", ErrInternal
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var bodyJSON map[string]interface{}
+        if err := json.Unmarshal(body, &bodyJSON); err != nil {
+            s.logger.Sugar().Errorf("failed to decode error response from CDN: %s", err.Error())
+        } else {
+            s.logger.Sugar().Errorf("ERROR from CDN endpoint(%s), code(%d), details: %s", endpoint, resp.StatusCode, bodyJSON["details"])
+        }
+        return "", ErrFailedToUploadPostImageToCDN
+	}
+
+	return string(body), nil
 }
 
 func (s *postService) FindByID(ctx context.Context, id int64) (*model.FullPost, error) {

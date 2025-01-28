@@ -100,7 +100,7 @@ func loadEnv() error {
 }
 
 func initConfig() error {
-	viper.AddConfigPath("./")
+	viper.AddConfigPath(".")
 	viper.SetConfigType("yaml")
 	viper.SetConfigName("app")
 	return viper.ReadInConfig()
