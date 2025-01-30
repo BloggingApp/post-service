@@ -162,20 +162,20 @@ func (s *userCacheService) consumeUserUpdates(ctx context.Context) {
 		var data map[string]interface{}
 		if err := json.Unmarshal(msg.Body, &data); err != nil {
 			s.logger.Sugar().Errorf("failed to unmarshal json in queue(%s): %s", queue, err.Error())
-			msg.Nack(false, false)
+			msg.Ack(false)
 			continue
 		}
 
 		userIDString, exists := data["user_id"].(string)
 		if !exists {
 			s.logger.Sugar().Errorf("'user_id' field is not provided")
-			msg.Nack(false, false)
+			msg.Ack(false)
 			continue
 		}
 		userID, err := uuid.Parse(userIDString)
 		if err != nil {
 			s.logger.Sugar().Errorf("provided an invalid user_id")
-			msg.Nack(false, false)
+			msg.Ack(false)
 			continue
 		}
 
@@ -187,7 +187,7 @@ func (s *userCacheService) consumeUserUpdates(ctx context.Context) {
 		}
 
 		if err := s.Update(ctx, userID, data); err != nil {
-			msg.Nack(false, true)
+			msg.Ack(false)
 			continue
 		}
 

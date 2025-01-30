@@ -38,8 +38,12 @@ func (r *userCacheRepo) Update(ctx context.Context, id uuid.UUID, updates map[st
 
 	for field := range updates {
 		if _, ok := allowedFieldsSet[field]; !ok {
-			return ErrFieldsNotAllowedToUpdate
+			delete(updates, field)
 		}
+	}
+
+	if len(updates) == 0 {
+		return nil
 	}
 
 	query := "UPDATE cached_users SET "
