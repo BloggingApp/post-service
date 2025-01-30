@@ -10,6 +10,8 @@ const (
 	COMMENT_REPLIES_KEY = "post:%d-comment:%d-replies:%d:%d" // <postID>:<commentID>:<limit>:<offset>
 	USER_LIKES_KEY = "user:%s-likes:%d:%d" // <userID>:<limit>:<offset>
 	IS_LIKED_KEY = "user:%s-is-liked:%d" // <userID>:<postID>
+	POST_LIKES_KEY = "post-likes:%d" // <postID>
+	POST_LIKES_KEY_PATTERN = "post-likes:*"
 )
 
 func PostKey(postID int64) string {
@@ -38,4 +40,8 @@ func UserLikesKey(userID string, limit int, offset int) string {
 
 func IsLikedKey(userID string, postID int64) string {
 	return fmt.Sprintf(IS_LIKED_KEY, userID, postID)
+}
+
+func PostLikesKey(postID int64) string {
+	return fmt.Sprintf(POST_LIKES_KEY, postID)
 }

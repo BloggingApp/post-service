@@ -85,6 +85,7 @@ func main() {
 	}(*srv, serverConfig)
 
 	go services.StartConsumeAll(ctx)
+	go services.StartScheduledLikeUpdates()
 
 	logger.Info("Server started")
 

@@ -386,49 +386,25 @@ func (r *postRepo) IncrViews(ctx context.Context, id int64) error {
 }
 
 func (r *postRepo) Like(ctx context.Context, postID int64, userID uuid.UUID) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
+	_, err := r.db.Exec(ctx, "INSERT INTO post_likes(post_id, user_id) VALUES($1, $2) ON CONFLICT DO NOTHING", postID, userID)
+	return err
+}
 
-	if _, err := tx.Exec(ctx, "INSERT INTO post_likes(post_id, user_id) VALUES($1, $2) ON CONFLICT DO NOTHING", postID, userID); err != nil {
-		return err
-	}
-
-	tag, err := tx.Exec(ctx, "UPDATE posts SET likes = likes + 1 WHERE id = $1 AND EXISTS(SELECT 1 FROM post_likes WHERE post_id = $1 AND user_id = $2)", postID, userID)
-	if err != nil {
-		return err
-	}
-
-	if tag.RowsAffected() == 0 {
-		return nil
-	}
-
-	return tx.Commit(ctx)
+func (r *postRepo) IncrPostLikesBy(ctx context.Context, postID int64, n int64) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE posts
+		SET likes = CASE
+			WHEN likes + $1 >= 0 THEN likes + $1
+			ELSE 0
+		END
+		WHERE id = $2
+	`, n, postID)
+	return err
 }
 
 func (r *postRepo) Unlike(ctx context.Context, postID int64, userID uuid.UUID) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	tag, err := tx.Exec(ctx, "DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2", postID, userID)
-	if err != nil {
-		return err
-	}
-
-	if tag.RowsAffected() == 0 {
-		return nil
-	}
-
-	if _, err := tx.Exec(ctx, "UPDATE posts SET likes = likes - 1 WHERE id = $1", postID); err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
+	_, err := r.db.Exec(ctx, "DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2", postID, userID)
+	return err
 }
 
 func (r *postRepo) IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool {

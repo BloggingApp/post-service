@@ -24,6 +24,7 @@ type Post interface {
 	SearchByTags(ctx context.Context, tags []string, limit int, offset int) ([]*model.FullPost, error)
 	IncrViews(ctx context.Context, id int64) error
 	Like(ctx context.Context, postID int64, userID uuid.UUID) error
+	IncrPostLikesBy(ctx context.Context, postID int64, n int64) error
 	Unlike(ctx context.Context, postID int64, userID uuid.UUID) error
 	IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool
 	FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error)

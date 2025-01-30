@@ -12,6 +12,9 @@ type Default interface {
 	SetJSON(ctx context.Context, key string, value interface{}, ttl time.Duration) error
 	Get(ctx context.Context, key string) *redis.StringCmd
 	Del(ctx context.Context, keys ...string) *redis.IntCmd
+	Incr(ctx context.Context, key string) *redis.IntCmd
+	Decr(ctx context.Context, key string) *redis.IntCmd
+	Keys(ctx context.Context, pattern string) *redis.StringSliceCmd
 }
 
 type RedisRepository struct {

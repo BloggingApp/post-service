@@ -27,6 +27,7 @@ type Post interface {
 	IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool
 	Like(ctx context.Context, postID int64, userID uuid.UUID) error
 	Unlike(ctx context.Context, postID int64, userID uuid.UUID) error
+	StartScheduledLikeUpdates()
 }
 
 type Comment interface {
