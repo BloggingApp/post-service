@@ -3,8 +3,9 @@ package repository
 import (
 	"github.com/BloggingApp/post-service/internal/repository/postgres"
 	"github.com/BloggingApp/post-service/internal/repository/redisrepo"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 type Repository struct {
@@ -12,9 +13,9 @@ type Repository struct {
 	Redis    *redisrepo.RedisRepository
 }
 
-func New(db *pgx.Conn, rdb *redis.Client) *Repository {
+func New(db *pgxpool.Pool, rdb *redis.Client, logger *zap.Logger) *Repository {
 	return &Repository{
-		Postgres: postgres.New(db),
+		Postgres: postgres.New(db, logger),
 		Redis: redisrepo.New(rdb),
 	}
 }

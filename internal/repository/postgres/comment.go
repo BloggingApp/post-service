@@ -6,14 +6,14 @@ import (
 
 	"github.com/BloggingApp/post-service/internal/model"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type commentRepo struct {
-	db *pgx.Conn
+	db *pgxpool.Pool
 }
 
-func newCommentRepo(db *pgx.Conn) Comment {
+func newCommentRepo(db *pgxpool.Pool) Comment {
 	return &commentRepo{
 		db: db,
 	}

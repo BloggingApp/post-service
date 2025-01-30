@@ -7,15 +7,19 @@ import (
 	"github.com/BloggingApp/post-service/internal/model"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 type postRepo struct {
-	db *pgx.Conn
+	db *pgxpool.Pool
+	logger *zap.Logger
 }
 
-func newPostRepo(db *pgx.Conn) Post {
+func newPostRepo(db *pgxpool.Pool, logger *zap.Logger) Post {
 	return &postRepo{
 		db: db,
+		logger: logger,
 	}
 }
 
@@ -128,6 +132,7 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 					Title: title,
 					Content: content,
 					Views: views,
+					Likes: likes,
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
 				},
@@ -428,8 +433,26 @@ func (r *postRepo) Unlike(ctx context.Context, postID int64, userID uuid.UUID) e
 
 func (r *postRepo) IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool {
 	var exists bool
-	err := r.db.QueryRow(ctx, "SELECT count(*) > 0 FROM post_likes WHERE post_id = $1 AND user_id = $2", postID, userID).Scan(&exists)
-	return err == nil && exists
+	var err error
+
+	for retries := 0; retries < 3; retries++ {
+		err = r.db.QueryRow(ctx, "SELECT count(*) > 0 FROM post_likes WHERE post_id = $1 AND user_id = $2", postID, userID).Scan(&exists)
+		if err == nil {
+			break
+		}
+		if err.Error() == "conn busy" {
+			time.Sleep(time.Duration(retries+1) * time.Millisecond * 100)
+			continue
+		}
+		break
+	}
+
+	if err != nil {
+		r.logger.Sugar().Errorf("failed to get is liked for user(%s): %s", userID.String(), err.Error())
+		return false
+	}
+
+	return exists
 }
 
 func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error) {

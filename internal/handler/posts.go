@@ -68,7 +68,9 @@ func (h *Handler) postsGetMy(c *gin.Context) {
 	c.JSON(http.StatusOK, posts)
 }
 
-func (h *Handler) postsGetOne(c *gin.Context) {
+func (h *Handler) postsGetByID(c *gin.Context) {
+	user := h.getCachedUserFromRequest(c)
+
 	postIDString := strings.TrimSpace(c.Param("postID"))
 	postID, err := strconv.Atoi(postIDString)
 	if err != nil {
@@ -82,7 +84,16 @@ func (h *Handler) postsGetOne(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, post)
+	postDto := dto.GetPost{
+		Post: *post,
+	}
+
+	if user != nil {
+		isLiked := h.services.Post.IsLiked(c.Request.Context(), post.Post.ID, user.ID)
+		postDto.IsLiked = isLiked
+	}
+
+	c.JSON(http.StatusOK, postDto)
 }
 
 func (h *Handler) postsGet(c *gin.Context) {
@@ -157,4 +168,22 @@ func (h *Handler) postsUnlike(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, nil)
+}
+
+func (h *Handler) postsGetLiked(c *gin.Context) {
+	user := h.getCachedUserFromRequest(c)
+
+	var input dto.GetPostsDto
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	posts, err := h.services.Post.FindUserLikes(c.Request.Context(), user.ID, input.Limit, input.Offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, posts)
 }

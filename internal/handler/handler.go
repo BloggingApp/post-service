@@ -38,11 +38,12 @@ func (h *Handler) InitRoutes() *gin.Engine {
 		{
 			posts.POST("", h.authMiddleware, h.postsCreate)
 			posts.GET("/my", h.authMiddleware, h.postsGetMy)
-			posts.GET("/:postID", h.postsGetOne)
+			posts.GET("/:postID", h.notRequiredAuthMiddleware, h.postsGetByID)
 			posts.GET("/author/:userID", h.postsGet)
 			posts.GET("/isLiked/:postID", h.authMiddleware, h.postsIsLiked)
 			posts.POST("/like/:postID", h.authMiddleware, h.postsLike)
 			posts.DELETE("/unlike/:postID", h.authMiddleware, h.postsUnlike)
+			posts.GET("/liked", h.authMiddleware, h.postsGetLiked)
 		}
 
 		comments := v1.Group("/comments")

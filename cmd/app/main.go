@@ -66,7 +66,7 @@ func main() {
 	}
 	logger.Info("Successfully connected to RabbitMQ")
 
-	repos := repository.New(db, rdb)
+	repos := repository.New(db, rdb, logger)
 	services := service.New(logger, repos, rabbitmq)
 	handlers := handler.New(services)
 

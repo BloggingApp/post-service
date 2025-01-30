@@ -5,7 +5,8 @@ import (
 
 	"github.com/BloggingApp/post-service/internal/model"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 const MAX_LIMIT = 5
@@ -47,9 +48,9 @@ type PostgresRepository struct {
 	UserCache
 }
 
-func New(db *pgx.Conn) *PostgresRepository {
+func New(db *pgxpool.Pool, logger *zap.Logger) *PostgresRepository {
 	return &PostgresRepository{
-		Post: newPostRepo(db),
+		Post: newPostRepo(db, logger),
 		Comment: newCommentRepo(db),
 		UserCache: newUserCacheRepo(db),
 	}

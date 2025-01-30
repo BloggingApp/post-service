@@ -255,12 +255,24 @@ func (s *postService) Like(ctx context.Context, postID int64, userID uuid.UUID) 
 		return ErrInternal
 	}
 
+	// Clear cache
+	if err := s.repo.Redis.Default.Del(ctx, redisrepo.IsLikedKey(userID.String(), postID)).Err(); err != nil {
+		s.logger.Sugar().Errorf("failed to delete user(%s) is liked for post(%d) from redis: %s", userID.String(), postID, err.Error())
+		return ErrInternal
+	}
+
 	return nil
 }
 
 func (s *postService) Unlike(ctx context.Context, postID int64, userID uuid.UUID) error {
 	if err := s.repo.Postgres.Post.Unlike(ctx, postID, userID); err != nil {
 		s.logger.Sugar().Errorf("failed to unlike post(%d): %s", postID, err.Error())
+		return ErrInternal
+	}
+
+	// Clear cache
+	if err := s.repo.Redis.Default.Del(ctx, redisrepo.IsLikedKey(userID.String(), postID)).Err(); err != nil {
+		s.logger.Sugar().Errorf("failed to delete user(%s) is liked for post(%d) from redis: %s", userID.String(), postID, err.Error())
 		return ErrInternal
 	}
 

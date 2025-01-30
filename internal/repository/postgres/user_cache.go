@@ -7,13 +7,14 @@ import (
 	"github.com/BloggingApp/post-service/internal/model"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type userCacheRepo struct {
-	db *pgx.Conn
+	db *pgxpool.Pool
 }
 
-func newUserCacheRepo(db *pgx.Conn) UserCache {
+func newUserCacheRepo(db *pgxpool.Pool) UserCache {
 	return &userCacheRepo{
 		db: db,
 	}
