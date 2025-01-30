@@ -228,3 +228,41 @@ func (s *postService) FindUserLikes(ctx context.Context, userID uuid.UUID, limit
 
 	return posts, nil
 }
+
+func (s *postService) IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool {
+	isLikedCache, err := s.repo.Redis.Default.Get(ctx, redisrepo.IsLikedKey(userID.String(), postID)).Bool()
+	if err == nil {
+		return isLikedCache
+	}
+	if err != redis.Nil {
+		s.logger.Sugar().Errorf("failed to get if user(%s) is liked post(%d) from redis: %s", userID.String(), postID, err.Error())
+		return false
+	}
+
+	isLiked := s.repo.Postgres.Post.IsLiked(ctx, postID, userID)
+
+	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedKey(userID.String(), postID), isLiked, time.Minute); err != nil {
+		s.logger.Sugar().Errorf("failed to set if user(%s) is liked post(%d) in redis: %s", userID.String(), postID, err.Error())
+		return false
+	}
+
+	return isLiked
+}
+
+func (s *postService) Like(ctx context.Context, postID int64, userID uuid.UUID) error {
+	if err := s.repo.Postgres.Post.Like(ctx, postID, userID); err != nil {
+		s.logger.Sugar().Errorf("failed to like post(%d): %s", postID, err.Error())
+		return ErrInternal
+	}
+
+	return nil
+}
+
+func (s *postService) Unlike(ctx context.Context, postID int64, userID uuid.UUID) error {
+	if err := s.repo.Postgres.Post.Unlike(ctx, postID, userID); err != nil {
+		s.logger.Sugar().Errorf("failed to unlike post(%d): %s", postID, err.Error())
+		return ErrInternal
+	}
+
+	return nil
+}

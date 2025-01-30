@@ -40,6 +40,9 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			posts.GET("/my", h.authMiddleware, h.postsGetMy)
 			posts.GET("/:postID", h.postsGetOne)
 			posts.GET("/author/:userID", h.postsGet)
+			posts.GET("/isLiked/:postID", h.authMiddleware, h.postsIsLiked)
+			posts.POST("/like/:postID", h.authMiddleware, h.postsLike)
+			posts.DELETE("/unlike/:postID", h.authMiddleware, h.postsUnlike)
 		}
 
 		comments := v1.Group("/comments")

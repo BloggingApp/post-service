@@ -24,7 +24,7 @@ type Post interface {
 	IncrViews(ctx context.Context, id int64) error
 	Like(ctx context.Context, postID int64, userID uuid.UUID) error
 	Unlike(ctx context.Context, postID int64, userID uuid.UUID) error
-	IsLiked(ctx context.Context, userID uuid.UUID, postID int64) bool
+	IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool
 	FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error)
 }
 

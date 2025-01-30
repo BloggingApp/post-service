@@ -107,3 +107,54 @@ func (h *Handler) postsGet(c *gin.Context) {
 
 	c.JSON(http.StatusOK, posts)
 }
+
+func (h *Handler) postsIsLiked(c *gin.Context) {
+	user := h.getCachedUserFromRequest(c)
+
+	postIDString := c.Param("postID")
+	postID, err := strconv.Atoi(postIDString)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	isLiked := h.services.Post.IsLiked(c.Request.Context(), int64(postID), user.ID)
+
+	c.JSON(http.StatusOK, gin.H{"isLiked": isLiked})
+}
+
+func (h *Handler) postsLike(c *gin.Context) {
+	user := h.getCachedUserFromRequest(c)
+
+	postIDString := c.Param("postID")
+	postID, err := strconv.Atoi(postIDString)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	if err := h.services.Post.Like(c.Request.Context(), int64(postID), user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, nil)
+}
+
+func (h *Handler) postsUnlike(c *gin.Context) {
+	user := h.getCachedUserFromRequest(c)
+
+	postIDString := c.Param("postID")
+	postID, err := strconv.Atoi(postIDString)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	if err := h.services.Post.Unlike(c.Request.Context(), int64(postID), user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, nil)
+}

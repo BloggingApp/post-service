@@ -24,6 +24,9 @@ type Post interface {
 	FindByID(ctx context.Context, id int64) (*model.FullPost, error)
 	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
 	FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error)
+	IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool
+	Like(ctx context.Context, postID int64, userID uuid.UUID) error
+	Unlike(ctx context.Context, postID int64, userID uuid.UUID) error
 }
 
 type Comment interface {

@@ -381,36 +381,55 @@ func (r *postRepo) IncrViews(ctx context.Context, id int64) error {
 }
 
 func (r *postRepo) Like(ctx context.Context, postID int64, userID uuid.UUID) error {
-	if _, err := r.db.Exec(ctx, "INSERT INTO post_likes(post_id, user_id) VALUES($1, $2)", postID, userID); err != nil {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, "INSERT INTO post_likes(post_id, user_id) VALUES($1, $2) ON CONFLICT DO NOTHING", postID, userID); err != nil {
 		return err
 	}
 
-	if _, err := r.db.Exec(ctx, "UPDATE posts SET likes = likes + 1 WHERE id = $1", postID); err != nil {
+	tag, err := tx.Exec(ctx, "UPDATE posts SET likes = likes + 1 WHERE id = $1 AND EXISTS(SELECT 1 FROM post_likes WHERE post_id = $1 AND user_id = $2)", postID, userID)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	if tag.RowsAffected() == 0 {
+		return nil
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (r *postRepo) Unlike(ctx context.Context, postID int64, userID uuid.UUID) error {
-	if _, err := r.db.Exec(ctx, "DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2", postID, userID); err != nil {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, "DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2", postID, userID)
+	if err != nil {
 		return err
 	}
 
-	if _, err := r.db.Exec(ctx, "UPDATE posts SET likes = likes - 1 WHERE id = $1", postID); err != nil {
+	if tag.RowsAffected() == 0 {
+		return nil
+	}
+
+	if _, err := tx.Exec(ctx, "UPDATE posts SET likes = likes - 1 WHERE id = $1", postID); err != nil {
 		return err
 	}
 
-	return nil
+	return tx.Commit(ctx)
 }
 
-func (r *postRepo) IsLiked(ctx context.Context, userID uuid.UUID, postID int64) bool {
-	var isLiked bool
-	if err := r.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM post_likes l WHERE l.user_id = $1 AND l.post_id = $2)", userID, postID).Scan(&isLiked); err != nil {
-		return false
-	}
-
-	return isLiked
+func (r *postRepo) IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool {
+	var exists bool
+	err := r.db.QueryRow(ctx, "SELECT count(*) > 0 FROM post_likes WHERE post_id = $1 AND user_id = $2", postID, userID).Scan(&exists)
+	return err == nil && exists
 }
 
 func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error) {
