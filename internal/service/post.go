@@ -8,8 +8,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/BloggingApp/post-service/internal/dto"
@@ -162,16 +160,8 @@ func (s *postService) FindByID(ctx context.Context, id int64) (*model.FullPost, 
 		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.PostKey(id), post, time.Hour); err != nil {
+	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.PostKey(id), post, time.Minute * 30); err != nil {
 		s.logger.Sugar().Errorf("failed to set post(%d) in redis: %s", id, err.Error())
-		return nil, ErrInternal
-	}
-
-	likesCache, err := s.repo.Redis.Default.Get(ctx, redisrepo.PostLikesKey(id)).Int64()
-	if err == nil {
-		post.Post.Likes += likesCache
-	} else if err != redis.Nil {
-		s.logger.Sugar().Errorf("failed to get cached post(%d) likes: %s", id, err.Error())
 		return nil, ErrInternal
 	}
 
@@ -264,66 +254,50 @@ func (s *postService) IsLiked(ctx context.Context, postID int64, userID uuid.UUI
 }
 
 func (s *postService) Like(ctx context.Context, postID int64, userID uuid.UUID) error {
-	if err := s.repo.Postgres.Post.Like(ctx, postID, userID); err != nil {
-		s.logger.Sugar().Errorf("failed to like post(%d) in postgres: %s", postID, err.Error())
-		return ErrInternal
+	liked := s.repo.Postgres.Post.Like(ctx, postID, userID)
+	if !liked {
+		return ErrHaveAlreadyLikedThePost
 	}
 
-	// Updating cache
+	// Update "is liked" cache
 	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedKey(userID.String(), postID), true, time.Minute); err != nil {
 		s.logger.Sugar().Errorf("failed to delete user(%s) is liked for post(%d) from redis: %s", userID.String(), postID, err.Error())
 		return ErrInternal
 	}
 
-	_, err := s.repo.Redis.Default.Get(ctx, redisrepo.PostLikesKey(postID)).Int64()
-	if err != nil && err != redis.Nil {
-		s.logger.Sugar().Errorf("failed to get post(%d) cached likes: %s", postID, err.Error())
-		return ErrInternal
-	}
-
-	if err != redis.Nil {
-		if err := s.repo.Redis.Default.Incr(ctx, redisrepo.PostLikesKey(postID)).Err(); err != nil {
-			s.logger.Sugar().Errorf("failed to incr post(%d) cached likes: %s", postID, err.Error())
-			return ErrInternal
-		}
-	} else {
-		if err := s.repo.Redis.Default.Set(ctx, redisrepo.PostLikesKey(postID), 1, time.Minute); err != nil {
-			s.logger.Sugar().Errorf("failed to set post(%d) likes in redis: %s", postID, err.Error())
-			return ErrInternal
-		}
+	if err := s.updatePostCachedLikes(ctx, postID, 1); err != nil {
+		return err
 	}
 
 	return nil
 }
 
 func (s *postService) Unlike(ctx context.Context, postID int64, userID uuid.UUID) error {
-	if err := s.repo.Postgres.Post.Unlike(ctx, postID, userID); err != nil {
-		s.logger.Sugar().Errorf("failed to unlike post(%d) in postgres: %s", postID, err.Error())
-		return ErrInternal
+	unliked := s.repo.Postgres.Post.Unlike(ctx, postID, userID)
+	if !unliked {
+		return ErrHaveNotLikedThePost
 	}
 
-	// Updating cache
+	// Update "is liked" cache
 	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedKey(userID.String(), postID), false, time.Minute); err != nil {
-		s.logger.Sugar().Errorf("failed to delete user(%s) is liked for post(%d) from redis: %s", userID.String(), postID, err.Error())
+		s.logger.Sugar().Errorf("failed to set user(%s) is liked for post(%d) in redis: %s", userID.String(), postID, err.Error())
 		return ErrInternal
 	}
 
-	cachedLikes, err := s.repo.Redis.Default.Get(ctx, redisrepo.PostLikesKey(postID)).Int64()
-	if err != nil && err != redis.Nil {
-		s.logger.Sugar().Errorf("failed to get post(%d) cached likes: %s", postID, err.Error())
-		return ErrInternal
+	// Update post cached likes count
+	if err := s.updatePostCachedLikes(ctx, postID, -1); err != nil {
+		return err
 	}
 
-	if err != redis.Nil {
-		if err := s.repo.Redis.Default.Decr(ctx, redisrepo.PostLikesKey(postID)).Err(); err != nil {
-			s.logger.Sugar().Errorf("failed to decr post(%d) cached likes: %s", postID, err.Error())
-			return ErrInternal
-		}
-	} else {
-		if err := s.repo.Redis.Default.Set(ctx, redisrepo.PostLikesKey(postID), cachedLikes - 1, time.Minute); err != nil {
-			s.logger.Sugar().Errorf("failed to set post(%d) likes in redis: %s", postID, err.Error())
-			return ErrInternal
-		}
+	return nil
+}
+
+func (s *postService) updatePostCachedLikes(ctx context.Context, postID int64, delta int64) error {
+	likesKey := redisrepo.PostLikesKey(postID)
+
+	if err := s.repo.Redis.Default.IncrBy(ctx, likesKey, delta).Err(); err != nil {
+		s.logger.Sugar().Errorf("failed to increment key(%s) in redis: %s", likesKey, err.Error())
+		return ErrInternal
 	}
 
 	return nil
@@ -340,11 +314,7 @@ func (s *postService) batchLikesUpdate(ctx context.Context) error {
 
 	for _, postKey := range postKeys {
 		// Getting postID from redis key
-		parts := strings.Split(postKey, ":")
-		if len(parts) < 2 {
-			continue
-		}
-		postID, err := strconv.Atoi(parts[1])
+		postID, err := redisrepo.GetPostIDFromPostLikesKey(postKey)
 		if err != nil {
 			continue
 		}
@@ -360,6 +330,10 @@ func (s *postService) batchLikesUpdate(ctx context.Context) error {
 
 		if err := s.repo.Postgres.Post.IncrPostLikesBy(ctx, int64(postID), n); err != nil {
 			return fmt.Errorf("failed to incr post(%d) likes by(%d): %s", postID, n, err.Error())
+		}
+
+		if err := s.repo.Redis.Default.Del(ctx, postKey).Err(); err != nil {
+			return fmt.Errorf("failed to delete post(%d) likes from redis: %s", postID, err.Error())
 		}
 	}
 

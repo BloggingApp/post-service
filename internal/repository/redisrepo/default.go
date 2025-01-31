@@ -83,6 +83,14 @@ func (r *defaultRepo) Decr(ctx context.Context, key string) *redis.IntCmd {
 	return r.rdb.Decr(ctx, key)
 }
 
+func (r *defaultRepo) IncrBy(ctx context.Context, key string, value int64) *redis.IntCmd {
+	return r.rdb.IncrBy(ctx, key, value)
+}
+
+func (r *defaultRepo) DecrBy(ctx context.Context, key string, value int64) *redis.IntCmd {
+	return r.rdb.DecrBy(ctx, key, value)
+}
+
 func (r *defaultRepo) Keys(ctx context.Context, pattern string) *redis.StringSliceCmd {
 	return r.rdb.Keys(ctx, pattern)
 }

@@ -385,9 +385,9 @@ func (r *postRepo) IncrViews(ctx context.Context, id int64) error {
 	return err
 }
 
-func (r *postRepo) Like(ctx context.Context, postID int64, userID uuid.UUID) error {
-	_, err := r.db.Exec(ctx, "INSERT INTO post_likes(post_id, user_id) VALUES($1, $2) ON CONFLICT DO NOTHING", postID, userID)
-	return err
+func (r *postRepo) Like(ctx context.Context, postID int64, userID uuid.UUID) bool {
+	cmd, err := r.db.Exec(ctx, "INSERT INTO post_likes(post_id, user_id) VALUES($1, $2) ON CONFLICT DO NOTHING", postID, userID)
+	return err == nil && cmd.RowsAffected() == 1
 }
 
 func (r *postRepo) IncrPostLikesBy(ctx context.Context, postID int64, n int64) error {
@@ -402,9 +402,9 @@ func (r *postRepo) IncrPostLikesBy(ctx context.Context, postID int64, n int64) e
 	return err
 }
 
-func (r *postRepo) Unlike(ctx context.Context, postID int64, userID uuid.UUID) error {
-	_, err := r.db.Exec(ctx, "DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2", postID, userID)
-	return err
+func (r *postRepo) Unlike(ctx context.Context, postID int64, userID uuid.UUID) bool {
+	cmd, err := r.db.Exec(ctx, "DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2", postID, userID)
+	return err == nil && cmd.RowsAffected() == 1
 }
 
 func (r *postRepo) IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool {

@@ -14,6 +14,8 @@ type Default interface {
 	Del(ctx context.Context, keys ...string) *redis.IntCmd
 	Incr(ctx context.Context, key string) *redis.IntCmd
 	Decr(ctx context.Context, key string) *redis.IntCmd
+	IncrBy(ctx context.Context, key string, value int64) *redis.IntCmd
+	DecrBy(ctx context.Context, key string, value int64) *redis.IntCmd
 	Keys(ctx context.Context, pattern string) *redis.StringSliceCmd
 }
 

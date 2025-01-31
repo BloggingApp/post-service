@@ -1,6 +1,10 @@
 package redisrepo
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 const (
 	POST_KEY = "post:%d" // <postID>
@@ -44,4 +48,16 @@ func IsLikedKey(userID string, postID int64) string {
 
 func PostLikesKey(postID int64) string {
 	return fmt.Sprintf(POST_LIKES_KEY, postID)
+}
+
+func GetPostIDFromPostLikesKey(key string) (int64, error) {
+	parts := strings.Split(key, ":")
+	if len(parts) < 2 {
+		return 0, fmt.Errorf("no part with post ID")
+	}
+	postID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, err
+	}
+	return int64(postID), nil
 }
