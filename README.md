@@ -15,15 +15,19 @@
 `/posts`:
 - **`[AUTH]` POST** -> `/` - *create a post*
 - **`[AUTH]` GET** -> `/my` - *get my posts*
-- **`[PUB]` GET** -> `/:<postID>` - *get post by `:postID`*
 - **`[PUB]` GET** -> `/author/:<userID>` - *get `:userID`'s posts*
-- **`[AUTH]` GET** -> `/isLiked/:<postID>` - *get if user has liked the post*
-- **`[AUTH]` POST** -> `/like/:<postID>` - *like post*
-- **`[AUTH]` DELETE** -> `/unlike/:<postID>` - *unlike post*
 - **`[AUTH]` GET** -> `/liked` - *get user liked posts*
+
+- **`[PUB]` GET** -> `/:<postID>` - *get post by `:postID`*
+- **`[AUTH]` GET** -> `/:<postID>/isLiked` - *get if user has liked the post*
+- **`[AUTH]` POST** -> `/:<postID>/like` - *like post*
+- **`[AUTH]` DELETE** -> `/:<postID>/unlike` - *unlike post*
 
 `/comments`:
 - **`[AUTH]` POST** -> `/` - *create a comment to post*
 - **`[PUB]` GET** -> `/:<postID>` - *get `:postID` post comments*
 - **`[PUB]` GET** -> `/:<postID>/:<commentID>/replies` - *get `:commentID` comment replies*
 - **`[AUTH]` DELETE** -> `/:<postID>/:<commentID>` - *delete `:commentID` comment*
+- **`[AUTH]` GET** -> `/:<postID>/:<commentID>/isLiked` - *get if user has liked the comment*
+- **`[AUTH]` POST** -> `/:<postID>/:<commentID>/like` - *like comment*
+- **`[AUTH]` DELETE** -> `/:<postID>/:<commentID>/unlike` - *unlike comment*
