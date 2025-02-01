@@ -35,6 +35,10 @@ type Comment interface {
 	FindPostComments(ctx context.Context, postID int64, limit int, offset int) ([]*model.FullComment, error)
 	FindCommentReplies(ctx context.Context, postID int64, commentID int64, limit int, offset int) ([]*model.FullComment, error)
 	Delete(ctx context.Context, postID int64, commentID int64, authorID uuid.UUID) error
+	Like(ctx context.Context, commentID int64, userID uuid.UUID) bool
+	IncrCommentLikesBy(ctx context.Context, commentID int64, n int64) error
+	Unlike(ctx context.Context, commentID int64, userID uuid.UUID) bool
+	IsLiked(ctx context.Context, commentID int64, userID uuid.UUID) bool
 }
 
 type UserCache interface {
@@ -52,7 +56,7 @@ type PostgresRepository struct {
 func New(db *pgxpool.Pool, logger *zap.Logger) *PostgresRepository {
 	return &PostgresRepository{
 		Post: newPostRepo(db, logger),
-		Comment: newCommentRepo(db),
+		Comment: newCommentRepo(db, logger),
 		UserCache: newUserCacheRepo(db),
 	}
 }

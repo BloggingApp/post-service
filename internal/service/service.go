@@ -27,7 +27,8 @@ type Post interface {
 	IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool
 	Like(ctx context.Context, postID int64, userID uuid.UUID) error
 	Unlike(ctx context.Context, postID int64, userID uuid.UUID) error
-	StartScheduledLikeUpdates()
+	SchedulePostLikesUpdates()
+	StartScheduledJobs()
 }
 
 type Comment interface {
@@ -35,6 +36,11 @@ type Comment interface {
 	FindPostComments(ctx context.Context, postID int64, limit int, offset int) ([]*model.FullComment, error)
 	FindCommentReplies(ctx context.Context, postID int64, commentID int64, limit int, offset int) ([]*model.FullComment, error)
 	Delete(ctx context.Context, postID int64, commentID int64, authorID uuid.UUID) error
+	Like(ctx context.Context, commentID int64, userID uuid.UUID) error
+	Unlike(ctx context.Context, commentID int64, userID uuid.UUID) error
+	IsLiked(ctx context.Context, commentID int64, userID uuid.UUID) bool
+	ScheduleCommentLikesUpdates()
+	StartScheduledJobs()
 }
 
 type UserCache interface {
@@ -61,4 +67,9 @@ func New(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQC
 
 func (s *Service) StartConsumeAll(ctx context.Context) {
 	go s.UserCache.consumeUserUpdates(ctx)
+}
+
+func (s *Service) StartAllScheduledJobs() {
+	go s.Post.StartScheduledJobs()
+	go s.Comment.StartScheduledJobs()
 }

@@ -26,17 +26,27 @@ type postService struct {
 	logger *zap.Logger
 	repo *repository.Repository
 	httpClient *http.Client
+	scheduler gocron.Scheduler
 }
 
 func newPostService(logger *zap.Logger, repo *repository.Repository) Post {
+	scheduler, err := gocron.NewScheduler()
+	if err != nil {
+		panic(err)
+	}
+
 	return &postService{
 		logger: logger,
 		repo: repo,
 		httpClient: &http.Client{},
+		scheduler: scheduler,
 	}
 }
 
-const POST_LIKES_CACHE_UPDATE = 20
+const (
+	POST_LIKES_UPDATE_TIMEOUT = time.Minute * 2
+	COMMENT_LIKES_UPDATE_TIMEOUT = time.Minute * 2
+)
 
 func (s *postService) Create(ctx context.Context, authorID uuid.UUID, dto dto.CreatePostDto, imagesDto []dto.CreatePostImagesDto) (*model.Post, error) {
 	post := model.Post{
@@ -234,7 +244,7 @@ func (s *postService) FindUserLikes(ctx context.Context, userID uuid.UUID, limit
 }
 
 func (s *postService) IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool {
-	isLikedCache, err := s.repo.Redis.Default.Get(ctx, redisrepo.IsLikedKey(userID.String(), postID)).Bool()
+	isLikedCache, err := s.repo.Redis.Default.Get(ctx, redisrepo.IsLikedPostKey(userID.String(), postID)).Bool()
 	if err == nil {
 		return isLikedCache
 	}
@@ -245,7 +255,7 @@ func (s *postService) IsLiked(ctx context.Context, postID int64, userID uuid.UUI
 
 	isLiked := s.repo.Postgres.Post.IsLiked(ctx, postID, userID)
 
-	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedKey(userID.String(), postID), isLiked, time.Minute); err != nil {
+	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedPostKey(userID.String(), postID), isLiked, time.Minute); err != nil {
 		s.logger.Sugar().Errorf("failed to set if user(%s) is liked post(%d) in redis: %s", userID.String(), postID, err.Error())
 		return false
 	}
@@ -260,11 +270,11 @@ func (s *postService) Like(ctx context.Context, postID int64, userID uuid.UUID) 
 	}
 
 	// Update "is liked" cache
-	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedKey(userID.String(), postID), true, time.Minute); err != nil {
+	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedPostKey(userID.String(), postID), true, time.Minute); err != nil {
 		s.logger.Sugar().Errorf("failed to delete user(%s) is liked for post(%d) from redis: %s", userID.String(), postID, err.Error())
 		return ErrInternal
 	}
-
+	
 	if err := s.updatePostCachedLikes(ctx, postID, 1); err != nil {
 		return err
 	}
@@ -279,12 +289,11 @@ func (s *postService) Unlike(ctx context.Context, postID int64, userID uuid.UUID
 	}
 
 	// Update "is liked" cache
-	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedKey(userID.String(), postID), false, time.Minute); err != nil {
+	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedPostKey(userID.String(), postID), false, time.Minute); err != nil {
 		s.logger.Sugar().Errorf("failed to set user(%s) is liked for post(%d) in redis: %s", userID.String(), postID, err.Error())
 		return ErrInternal
 	}
 
-	// Update post cached likes count
 	if err := s.updatePostCachedLikes(ctx, postID, -1); err != nil {
 		return err
 	}
@@ -303,7 +312,7 @@ func (s *postService) updatePostCachedLikes(ctx context.Context, postID int64, d
 	return nil
 }
 
-func (s *postService) batchLikesUpdate(ctx context.Context) error {
+func (s *postService) postsBatchLikesUpdate(ctx context.Context) error {
 	postKeys, err := s.repo.Redis.Default.Keys(ctx, redisrepo.POST_LIKES_KEY_PATTERN).Result()
 	if err != nil && err != redis.Nil {
 		return fmt.Errorf("failed to get keys with pattern(%s) from redis: %s", redisrepo.POST_LIKES_KEY_PATTERN, err.Error())
@@ -328,7 +337,7 @@ func (s *postService) batchLikesUpdate(ctx context.Context) error {
 			continue
 		}
 
-		if err := s.repo.Postgres.Post.IncrPostLikesBy(ctx, int64(postID), n); err != nil {
+		if err := s.repo.Postgres.Post.IncrPostLikesBy(ctx, postID, n); err != nil {
 			return fmt.Errorf("failed to incr post(%d) likes by(%d): %s", postID, n, err.Error())
 		}
 
@@ -340,17 +349,16 @@ func (s *postService) batchLikesUpdate(ctx context.Context) error {
 	return nil
 }
 
-func (s *postService) StartScheduledLikeUpdates() {
-	scheduler, err := gocron.NewScheduler()
-	if err != nil {
-		panic(err)
-	}
-
-	scheduler.NewJob(gocron.DurationJob(time.Minute), gocron.NewTask(func(ctx context.Context) {
-		if err := s.batchLikesUpdate(ctx); err != nil {
+func (s *postService) SchedulePostLikesUpdates() {
+	s.scheduler.NewJob(gocron.DurationJob(POST_LIKES_UPDATE_TIMEOUT), gocron.NewTask(func(ctx context.Context) {
+		if err := s.postsBatchLikesUpdate(ctx); err != nil {
 			s.logger.Sugar().Error(err.Error())
 		}
 	}))
+}
 
-	scheduler.Start()
+func (s *postService) StartScheduledJobs() {
+	s.SchedulePostLikesUpdates()
+
+	s.scheduler.Start()
 }

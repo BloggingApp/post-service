@@ -49,9 +49,20 @@ func (h *Handler) InitRoutes() *gin.Engine {
 		comments := v1.Group("/comments")
 		{
 			comments.POST("", h.authMiddleware, h.commentsCreate)
-			comments.GET("/:postID", h.commentsGet)
-			comments.GET("/:postID/:commentID/replies", h.commentsGetReplies)
-			comments.DELETE("/:postID/:commentID", h.authMiddleware, h.commentsDelete)
+
+			postComments := comments.Group("/:postID")
+			{
+				postComments.GET("", h.commentsGet)
+
+				comment := postComments.Group("/:commentID")
+				{
+					comment.GET("/replies", h.commentsGetReplies)
+					comment.DELETE("", h.authMiddleware, h.commentsDelete)
+					comment.GET("/isLiked", h.authMiddleware, h.commentsIsLiked)
+					comment.POST("/like", h.authMiddleware, h.commentsLike)
+					comment.DELETE("/unlike", h.authMiddleware, h.commentsUnlike)
+				}
+			}
 		}
 	}
 

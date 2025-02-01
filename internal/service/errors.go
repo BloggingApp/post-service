@@ -9,4 +9,6 @@ var (
 	ErrFailedToUploadPostImageToCDN = errors.New("failed to upload post image to CDN")
 	ErrHaveAlreadyLikedThePost = errors.New("you have already liked this post")
 	ErrHaveNotLikedThePost = errors.New("you haven't liked this post")
+	ErrHaveAlreadyLikedTheComment = errors.New("you have already liked this comment")
+	ErrHaveNotLikedTheComment = errors.New("you haven't liked this comment")
 )

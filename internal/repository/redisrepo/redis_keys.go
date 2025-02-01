@@ -13,9 +13,12 @@ const (
 	POST_COMMENTS_KEY = "post:%d-comments:%d:%d" // <postID>:<limit>:<offset>
 	COMMENT_REPLIES_KEY = "post:%d-comment:%d-replies:%d:%d" // <postID>:<commentID>:<limit>:<offset>
 	USER_LIKES_KEY = "user:%s-likes:%d:%d" // <userID>:<limit>:<offset>
-	IS_LIKED_KEY = "user:%s-is-liked:%d" // <userID>:<postID>
+	IS_LIKED_POST_KEY = "user:%s-is-liked-post:%d" // <userID>:<postID>
 	POST_LIKES_KEY = "post-likes:%d" // <postID>
 	POST_LIKES_KEY_PATTERN = "post-likes:*"
+	COMMENT_LIKES_KEY = "comment-likes:%d" // <commentID>
+	COMMENT_LIKES_KEY_PATTERN = "comment-likes:*"
+	IS_LIKED_COMMENT_KEY = "user:%s-is-liked-comment:%d" // <userID>:<commentID>
 )
 
 func PostKey(postID int64) string {
@@ -42,8 +45,8 @@ func UserLikesKey(userID string, limit int, offset int) string {
 	return fmt.Sprintf(USER_LIKES_KEY, userID, limit, offset)
 }
 
-func IsLikedKey(userID string, postID int64) string {
-	return fmt.Sprintf(IS_LIKED_KEY, userID, postID)
+func IsLikedPostKey(userID string, postID int64) string {
+	return fmt.Sprintf(IS_LIKED_POST_KEY, userID, postID)
 }
 
 func PostLikesKey(postID int64) string {
@@ -60,4 +63,24 @@ func GetPostIDFromPostLikesKey(key string) (int64, error) {
 		return 0, err
 	}
 	return int64(postID), nil
+}
+
+func CommentLikesKey(commentID int64) string {
+	return fmt.Sprintf(COMMENT_LIKES_KEY, commentID)
+}
+
+func GetCommentIDFromCommentLikesKey(key string) (int64, error) {
+	parts := strings.Split(key, ":")
+	if len(parts) < 2 {
+		return 0, fmt.Errorf("no part with comment ID")
+	}
+	commentID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, err
+	}
+	return int64(commentID), nil
+}
+
+func IsLikedCommentKey(userID string, commentID int64) string {
+	return fmt.Sprintf(IS_LIKED_COMMENT_KEY, userID, commentID)
 }

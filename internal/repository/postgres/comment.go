@@ -7,15 +7,18 @@ import (
 	"github.com/BloggingApp/post-service/internal/model"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 type commentRepo struct {
 	db *pgxpool.Pool
+	logger *zap.Logger
 }
 
-func newCommentRepo(db *pgxpool.Pool) Comment {
+func newCommentRepo(db *pgxpool.Pool, logger *zap.Logger) Comment {
 	return &commentRepo{
 		db: db,
+		logger: logger,
 	}
 }
 
@@ -140,4 +143,50 @@ func (r *commentRepo) FindCommentReplies(ctx context.Context, postID int64, comm
 func (r *commentRepo) Delete(ctx context.Context, postID int64, commentID int64, authorID uuid.UUID) error {
 	_, err := r.db.Exec(ctx, "DELETE FROM comments WHERE post_id = $1 AND id = $2 AND author_id = $3", postID, commentID, authorID)
 	return err
+}
+
+func (r *commentRepo) Like(ctx context.Context, commentID int64, userID uuid.UUID) bool {
+	cmd, err := r.db.Exec(ctx, "INSERT INTO comment_likes(comment_id, user_id) VALUES($1, $2) ON CONFLICT DO NOTHING", commentID, userID)
+	return err == nil && cmd.RowsAffected() == 1
+}
+
+func (r *commentRepo) IncrCommentLikesBy(ctx context.Context, commentID int64, n int64) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE comments
+		SET likes = CASE
+			WHEN likes + $1 >= 0 THEN likes + $1
+			ELSE 0
+		END
+		WHERE id = $2
+	`, n, commentID)
+	return err
+}
+
+func (r *commentRepo) Unlike(ctx context.Context, commentID int64, userID uuid.UUID) bool {
+	cmd, err := r.db.Exec(ctx, "DELETE FROM comment_likes WHERE post_id = $1 AND user_id = $2", commentID, userID)
+	return err == nil && cmd.RowsAffected() == 1
+}
+
+func (r *commentRepo) IsLiked(ctx context.Context, commentID int64, userID uuid.UUID) bool {
+	var exists bool
+	var err error
+
+	for retries := 0; retries < 3; retries++ {
+		err = r.db.QueryRow(ctx, "SELECT count(*) > 0 FROM comment_likes WHERE comment_id = $1 AND user_id = $2", commentID, userID).Scan(&exists)
+		if err == nil {
+			break
+		}
+		if err.Error() == "conn busy" {
+			time.Sleep(time.Duration(retries+1) * time.Millisecond * 100)
+			continue
+		}
+		break
+	}
+
+	if err != nil {
+		r.logger.Sugar().Errorf("failed to get is liked for user(%s): %s", userID.String(), err.Error())
+		return false
+	}
+
+	return exists
 }

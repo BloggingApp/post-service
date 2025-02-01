@@ -98,3 +98,54 @@ func (h *Handler) commentsDelete(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.NewBasicResponse(true, ""))
 }
+
+func (h *Handler) commentsIsLiked(c *gin.Context) {
+	user := h.getCachedUserFromRequest(c)
+
+	commentIDString := strings.TrimSpace(c.Param("commentID"))
+	commentID, err := strconv.Atoi(commentIDString)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	isLiked := h.services.Comment.IsLiked(c.Request.Context(), int64(commentID), user.ID)
+
+	c.JSON(http.StatusOK, gin.H{"isLiked": isLiked})
+}
+
+func (h *Handler) commentsLike(c *gin.Context) {
+	user := h.getCachedUserFromRequest(c)
+
+	commentIDString := strings.TrimSpace(c.Param("commentID"))
+	commentID, err := strconv.Atoi(commentIDString)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	if err := h.services.Comment.Like(c.Request.Context(), int64(commentID), user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, nil)
+}
+
+func (h *Handler) commentsUnlike(c *gin.Context) {
+	user := h.getCachedUserFromRequest(c)
+
+	commentIDString := strings.TrimSpace(c.Param("commentID"))
+	commentID, err := strconv.Atoi(commentIDString)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	if err := h.services.Comment.Unlike(c.Request.Context(), int64(commentID), user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, nil)
+}
