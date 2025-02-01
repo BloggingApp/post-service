@@ -163,7 +163,7 @@ func (r *commentRepo) IncrCommentLikesBy(ctx context.Context, commentID int64, n
 }
 
 func (r *commentRepo) Unlike(ctx context.Context, commentID int64, userID uuid.UUID) bool {
-	cmd, err := r.db.Exec(ctx, "DELETE FROM comment_likes WHERE post_id = $1 AND user_id = $2", commentID, userID)
+	cmd, err := r.db.Exec(ctx, "DELETE FROM comment_likes WHERE comment_id = $1 AND user_id = $2", commentID, userID)
 	return err == nil && cmd.RowsAffected() == 1
 }
 
