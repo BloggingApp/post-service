@@ -112,6 +112,7 @@ func (s *commentService) Delete(ctx context.Context, postID int64, commentID int
 	return nil
 }
 
+// Set 'unlike' value to true if you want to UNLIKE a comment
 func (s *commentService) Like(ctx context.Context, commentID int64, userID uuid.UUID, unlike bool) error {
 	var affected bool
 	var delta int64

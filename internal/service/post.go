@@ -263,6 +263,7 @@ func (s *postService) IsLiked(ctx context.Context, postID int64, userID uuid.UUI
 	return isLiked
 }
 
+// Set 'unlike' value to true if you want to UNLIKE a post
 func (s *postService) Like(ctx context.Context, postID int64, userID uuid.UUID, unlike bool) error {
 	var affected bool
 	var delta int64
