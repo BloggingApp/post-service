@@ -1,0 +1,12 @@
+app:
+  url: "http://localhost:8000"
+  port: "8000"
+
+client:
+  origin: "http://localhost:5173"
+
+user-service:
+  api: "http://localhost:8080/api/v1"
+
+cdn:
+  origin: "http://localhost:4400"
