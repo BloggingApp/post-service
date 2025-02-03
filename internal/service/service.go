@@ -25,8 +25,7 @@ type Post interface {
 	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
 	FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error)
 	IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool
-	Like(ctx context.Context, postID int64, userID uuid.UUID) error
-	Unlike(ctx context.Context, postID int64, userID uuid.UUID) error
+	Like(ctx context.Context, postID int64, userID uuid.UUID, unlike bool) error
 	SchedulePostLikesUpdates()
 	StartScheduledJobs()
 }
@@ -36,8 +35,7 @@ type Comment interface {
 	FindPostComments(ctx context.Context, postID int64, limit int, offset int) ([]*model.FullComment, error)
 	FindCommentReplies(ctx context.Context, postID int64, commentID int64, limit int, offset int) ([]*model.FullComment, error)
 	Delete(ctx context.Context, postID int64, commentID int64, authorID uuid.UUID) error
-	Like(ctx context.Context, commentID int64, userID uuid.UUID) error
-	Unlike(ctx context.Context, commentID int64, userID uuid.UUID) error
+	Like(ctx context.Context, commentID int64, userID uuid.UUID, unlike bool) error
 	IsLiked(ctx context.Context, commentID int64, userID uuid.UUID) bool
 	ScheduleCommentLikesUpdates()
 	StartScheduledJobs()

@@ -112,38 +112,28 @@ func (s *commentService) Delete(ctx context.Context, postID int64, commentID int
 	return nil
 }
 
-func (s *commentService) Like(ctx context.Context, commentID int64, userID uuid.UUID) error {
-	liked := s.repo.Postgres.Comment.Like(ctx, commentID, userID)
-	if !liked {
-		return ErrHaveAlreadyLikedThePost
+func (s *commentService) Like(ctx context.Context, commentID int64, userID uuid.UUID, unlike bool) error {
+	var affected bool
+	var delta int64
+	if unlike {
+		affected = s.repo.Postgres.Comment.Unlike(ctx, commentID, userID)
+		delta = -1
+	} else {
+		affected = s.repo.Postgres.Comment.Like(ctx, commentID, userID)
+		delta = 1
+	}
+
+	if !affected {
+		return ErrFailedToLikeTheComment
 	}
 
 	// Update "is liked" cache
-	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedCommentKey(userID.String(), commentID), true, time.Minute); err != nil {
+	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedCommentKey(userID.String(), commentID), !unlike, time.Minute); err != nil {
 		s.logger.Sugar().Errorf("failed to set user(%s) is liked for comment(%d) in redis: %s", userID.String(), commentID, err.Error())
 		return ErrInternal
 	}
 
-	if err := s.updateCommentCachedLikes(ctx, commentID, 1); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *commentService) Unlike(ctx context.Context, commentID int64, userID uuid.UUID) error {
-	unliked := s.repo.Postgres.Comment.Unlike(ctx, commentID, userID)
-	if !unliked {
-		return ErrHaveNotLikedTheComment
-	}
-
-	// Update "is liked" cache
-	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedCommentKey(userID.String(), commentID), false, time.Minute); err != nil {
-		s.logger.Sugar().Errorf("failed to set user(%s) is liked for comment(%d) in redis: %s", userID.String(), commentID, err.Error())
-		return ErrInternal
-	}
-
-	if err := s.updateCommentCachedLikes(ctx, commentID, -1); err != nil {
+	if err := s.updateCommentCachedLikes(ctx, commentID, delta); err != nil {
 		return err
 	}
 

@@ -144,7 +144,7 @@ func (h *Handler) postsLike(c *gin.Context) {
 		return
 	}
 
-	if err := h.services.Post.Like(c.Request.Context(), int64(postID), user.ID); err != nil {
+	if err := h.services.Post.Like(c.Request.Context(), int64(postID), user.ID, false); err != nil {
 		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
 		return
 	}
@@ -162,7 +162,7 @@ func (h *Handler) postsUnlike(c *gin.Context) {
 		return
 	}
 
-	if err := h.services.Post.Unlike(c.Request.Context(), int64(postID), user.ID); err != nil {
+	if err := h.services.Post.Like(c.Request.Context(), int64(postID), user.ID, true); err != nil {
 		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
 		return
 	}

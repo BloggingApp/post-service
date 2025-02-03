@@ -124,7 +124,7 @@ func (h *Handler) commentsLike(c *gin.Context) {
 		return
 	}
 
-	if err := h.services.Comment.Like(c.Request.Context(), int64(commentID), user.ID); err != nil {
+	if err := h.services.Comment.Like(c.Request.Context(), int64(commentID), user.ID, false); err != nil {
 		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
 		return
 	}
@@ -142,7 +142,7 @@ func (h *Handler) commentsUnlike(c *gin.Context) {
 		return
 	}
 
-	if err := h.services.Comment.Unlike(c.Request.Context(), int64(commentID), user.ID); err != nil {
+	if err := h.services.Comment.Like(c.Request.Context(), int64(commentID), user.ID, true); err != nil {
 		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
 		return
 	}
