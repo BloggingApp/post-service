@@ -90,6 +90,18 @@ func (s *postService) uploadImageToCDN(path string, file multipart.File, fileHea
 	var requestBody bytes.Buffer
 	writer := multipart.NewWriter(&requestBody)
 
+	// Writing text fields
+	if err := writer.WriteField("type", "IMAGE"); err != nil {
+		s.logger.Sugar().Errorf("failed to write 'type' field for CDN request: %s", err.Error())
+		return "", ErrInternal
+	}
+
+	if err := writer.WriteField("path", path); err != nil {
+		s.logger.Sugar().Errorf("failed to write 'path' field for CDN request: %s", err.Error())
+		return "", ErrInternal
+	}
+
+	// Writing file
 	fileWriter, err := writer.CreateFormFile("file", fileHeader.Filename)
 	if err != nil {
 		s.logger.Sugar().Errorf("failed to create file part for CDN request: %s", err.Error())
@@ -106,11 +118,7 @@ func (s *postService) uploadImageToCDN(path string, file multipart.File, fileHea
 		return "", ErrInternal
 	}
 
-	if err := writer.WriteField("path", path); err != nil {
-		s.logger.Sugar().Errorf("failed to write path field for CDN request: %s", err.Error())
-		return "", ErrInternal
-	}
-
+	// End of request body
 	if err := writer.Close(); err != nil {
 		s.logger.Sugar().Errorf("failed to close writer for CDN request: %s", err.Error())
 		return "", ErrInternal
@@ -123,7 +131,6 @@ func (s *postService) uploadImageToCDN(path string, file multipart.File, fileHea
 	}
 
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Add("type", "IMAGE")
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
