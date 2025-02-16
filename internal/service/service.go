@@ -20,7 +20,7 @@ func maxLimit(limit *int) {
 }
 
 type Post interface {
-	Create(ctx context.Context, authorID uuid.UUID, dto dto.CreatePostDto, images []dto.CreatePostImagesDto) (*model.Post, error)
+	Create(ctx context.Context, authorID uuid.UUID, req dto.CreatePostRequest, images []dto.CreatePostImagesRequest) (*model.Post, error)
 	FindByID(ctx context.Context, id int64) (*model.FullPost, error)
 	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
 	FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error)
@@ -57,7 +57,7 @@ type Service struct {
 
 func New(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn) *Service {
 	return &Service{
-		Post: newPostService(logger, repo),
+		Post: newPostService(logger, repo, rabbitmq),
 		Comment: newCommentService(logger, repo),
 		UserCache: newUserCacheService(logger, repo, rabbitmq),
 	}
