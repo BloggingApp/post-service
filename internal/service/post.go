@@ -93,7 +93,7 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 		s.logger.Sugar().Errorf("failed to marshal user(%s)'s post created msg to json: %s", authorID.String(), err.Error())
 		return nil, ErrInternal
 	}
-	if err := s.rabbitmq.Publish(rabbitmq.NEW_POST_NOTIFICATION_QUEUE, postCreatedMsgJSON); err != nil {
+	if err := s.rabbitmq.PublishToQueue(rabbitmq.NEW_POST_NOTIFICATION_QUEUE, postCreatedMsgJSON); err != nil {
 		s.logger.Sugar().Errorf("failed to publish user(%s)'s new post notification to rabbitmq: %s", authorID.String(), err.Error())
 		return nil, ErrInternal
 	}
