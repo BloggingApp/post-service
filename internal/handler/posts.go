@@ -13,7 +13,7 @@ import (
 func (h *Handler) postsCreate(c *gin.Context) {
 	user := h.getCachedUserFromRequest(c)
 
-	var input dto.CreatePostDto
+	var input dto.CreatePostRequest
 	if err := c.ShouldBind(&input); err != nil {
 		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
 		return
@@ -25,7 +25,7 @@ func (h *Handler) postsCreate(c *gin.Context) {
 		return
 	}
 
-	var images []dto.CreatePostImagesDto
+	var images []dto.CreatePostImagesRequest
 	for positionString, files := range form.File {
 		positionInt, err := strconv.Atoi(positionString)
 		if err != nil {
@@ -34,7 +34,7 @@ func (h *Handler) postsCreate(c *gin.Context) {
 		}
 
 		for _, file := range files {
-			images = append(images, dto.CreatePostImagesDto{
+			images = append(images, dto.CreatePostImagesRequest{
 				Position: positionInt,
 				FileHeader: file,
 			})
@@ -53,7 +53,7 @@ func (h *Handler) postsCreate(c *gin.Context) {
 func (h *Handler) postsGetMy(c *gin.Context) {
 	user := h.getCachedUserFromRequest(c)
 
-	var input dto.GetPostsDto
+	var input dto.GetPostsRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
 		return
@@ -97,7 +97,7 @@ func (h *Handler) postsGetByID(c *gin.Context) {
 }
 
 func (h *Handler) postsGet(c *gin.Context) {
-	var input dto.GetPostsDto
+	var input dto.GetPostsRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
 		return
@@ -173,7 +173,7 @@ func (h *Handler) postsUnlike(c *gin.Context) {
 func (h *Handler) postsGetLiked(c *gin.Context) {
 	user := h.getCachedUserFromRequest(c)
 
-	var input dto.GetPostsDto
+	var input dto.GetPostsRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
 		return

@@ -12,6 +12,7 @@ import (
 
 	"github.com/BloggingApp/post-service/internal/dto"
 	"github.com/BloggingApp/post-service/internal/model"
+	"github.com/BloggingApp/post-service/internal/rabbitmq"
 	"github.com/BloggingApp/post-service/internal/repository"
 	"github.com/BloggingApp/post-service/internal/repository/redisrepo"
 	"github.com/go-co-op/gocron/v2"
@@ -27,9 +28,10 @@ type postService struct {
 	repo *repository.Repository
 	httpClient *http.Client
 	scheduler gocron.Scheduler
+	rabbitmq *rabbitmq.MQConn
 }
 
-func newPostService(logger *zap.Logger, repo *repository.Repository) Post {
+func newPostService(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn) Post {
 	scheduler, err := gocron.NewScheduler()
 	if err != nil {
 		panic(err)
@@ -40,6 +42,7 @@ func newPostService(logger *zap.Logger, repo *repository.Repository) Post {
 		repo: repo,
 		httpClient: &http.Client{},
 		scheduler: scheduler,
+		rabbitmq: rabbitmq,
 	}
 }
 
@@ -48,11 +51,11 @@ const (
 	COMMENT_LIKES_UPDATE_TIMEOUT = time.Minute * 2
 )
 
-func (s *postService) Create(ctx context.Context, authorID uuid.UUID, dto dto.CreatePostDto, imagesDto []dto.CreatePostImagesDto) (*model.Post, error) {
+func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.CreatePostRequest, imagesDto []dto.CreatePostImagesRequest) (*model.Post, error) {
 	post := model.Post{
 		AuthorID: authorID,
-		Title: dto.Title,
-		Content: dto.Content,
+		Title: req.Title,
+		Content: req.Content,
 	}
 
 	var images []*model.PostImage
@@ -74,9 +77,25 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, dto dto.Cr
 		images = append(images, &model.PostImage{URL: returnedURL, Position: img.Position})
 	}
 
-	createdPost, err := s.repo.Postgres.Post.Create(ctx, post, images, dto.Tags)
+	createdPost, err := s.repo.Postgres.Post.Create(ctx, post, images, req.Tags)
 	if err != nil {
 		s.logger.Sugar().Errorf("failed to create user(%s) post: %s", post.AuthorID.String(), err.Error())
+		return nil, ErrInternal
+	}
+
+	postCreatedMsg := dto.MQPostCreatedMsg{
+		PostID: createdPost.ID,
+		UserID: authorID,
+		PostTitle: createdPost.Title,
+		CreatedAt: createdPost.CreatedAt,
+	}
+	postCreatedMsgJSON, err := json.Marshal(postCreatedMsg)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to marshal user(%s)'s post created msg to json: %s", authorID.String(), err.Error())
+		return nil, ErrInternal
+	}
+	if err := s.rabbitmq.PublishToQueue(rabbitmq.NEW_POST_NOTIFICATION_QUEUE, postCreatedMsgJSON); err != nil {
+		s.logger.Sugar().Errorf("failed to publish user(%s)'s new post notification to rabbitmq: %s", authorID.String(), err.Error())
 		return nil, ErrInternal
 	}
 
