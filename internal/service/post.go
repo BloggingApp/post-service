@@ -86,6 +86,7 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 	postCreatedMsg := dto.MQPostCreatedMsg{
 		PostID: createdPost.ID,
 		UserID: authorID,
+		PostTitle: createdPost.Title,
 		CreatedAt: createdPost.CreatedAt,
 	}
 	postCreatedMsgJSON, err := json.Marshal(postCreatedMsg)
