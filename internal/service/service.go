@@ -26,6 +26,7 @@ type Post interface {
 	FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error)
 	IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool
 	Like(ctx context.Context, postID int64, userID uuid.UUID, unlike bool) error
+	GetTrending(ctx context.Context, hours, limit int) ([]*model.FullPost, error)
 	SchedulePostLikesUpdates()
 	StartScheduledJobs()
 }

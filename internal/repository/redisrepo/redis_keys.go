@@ -19,6 +19,7 @@ const (
 	COMMENT_LIKES_KEY = "comment-likes:%d" // <commentID>
 	COMMENT_LIKES_KEY_PATTERN = "comment-likes:*"
 	IS_LIKED_COMMENT_KEY = "user:%s-is-liked-comment:%d" // <userID>:<commentID>
+	TRENDING_POSTS_KEY = "trending-posts:%d" // <limit>
 )
 
 func PostKey(postID int64) string {
@@ -83,4 +84,8 @@ func GetCommentIDFromCommentLikesKey(key string) (int64, error) {
 
 func IsLikedCommentKey(userID string, commentID int64) string {
 	return fmt.Sprintf(IS_LIKED_COMMENT_KEY, userID, commentID)
+}
+
+func TrendingPostsKey(limit int) string {
+	return fmt.Sprintf(TRENDING_POSTS_KEY, limit)
 }

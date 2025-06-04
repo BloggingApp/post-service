@@ -366,6 +366,34 @@ func (s *postService) postsBatchLikesUpdate(ctx context.Context) error {
 	return nil
 }
 
+func (s *postService) GetTrending(ctx context.Context, hours, limit int) ([]*model.FullPost, error) {
+	if hours > 24 * 7 {
+		hours = 24 * 7
+	}
+
+	postsCache, err := redisrepo.GetMany[model.FullPost](s.repo.Redis.Default, ctx, redisrepo.TrendingPostsKey(limit))
+	if err == nil {
+		return postsCache, nil
+	}
+	if err != redis.Nil {
+		s.logger.Sugar().Errorf("failed to get trending posts with limit(%d) from redis: %s", limit, err.Error())
+		return nil, ErrInternal
+	}
+
+	posts, err := s.repo.Postgres.Post.GetTrending(ctx, hours, limit)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to get trending posts with limit(%d) from postgres: %s", limit, err.Error())
+		return nil, ErrInternal
+	}
+
+	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.TrendingPostsKey(limit), posts, time.Duration(hours * int(time.Hour))); err != nil {
+		s.logger.Sugar().Errorf("failed to set trending posts for limit(%d) in redis cache: %s", limit, err.Error())
+		return nil, ErrInternal
+	}
+
+	return posts, nil
+}
+
 func (s *postService) SchedulePostLikesUpdates() {
 	s.scheduler.NewJob(gocron.DurationJob(POST_LIKES_UPDATE_TIMEOUT), gocron.NewTask(func(ctx context.Context) {
 		if err := s.postsBatchLikesUpdate(ctx); err != nil {
