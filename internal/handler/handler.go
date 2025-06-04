@@ -40,6 +40,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			posts.GET("/my", h.authMiddleware, h.postsGetMy)
 			posts.GET("/author/:userID", h.postsGet)
 			posts.GET("/liked", h.authMiddleware, h.postsGetLiked)
+			posts.GET("/trending", h.authMiddleware, h.postsTrending)
 
 			post := posts.Group("/:postID")
 			{

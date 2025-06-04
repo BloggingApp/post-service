@@ -187,3 +187,20 @@ func (h *Handler) postsGetLiked(c *gin.Context) {
 
 	c.JSON(http.StatusOK, posts)
 }
+
+func (h *Handler) postsTrending(c *gin.Context) {
+	hours, err0 := strconv.Atoi(c.Query("h"))
+	limit, err1 := strconv.Atoi(c.Query("limit"))
+	if err0 != nil || err1 != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, errHoursAndLimitMustBeInt.Error()))
+		return
+	}
+
+	posts, err := h.services.Post.GetTrending(c.Request.Context(), hours, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, posts)
+}

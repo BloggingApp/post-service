@@ -6,7 +6,6 @@ import (
 
 	"github.com/BloggingApp/post-service/internal/model"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
@@ -166,7 +165,7 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 	}
 
 	if len(posts) == 0 {
-		return nil, pgx.ErrNoRows
+		return nil, nil
 	}
 
 	return posts[0], nil
@@ -374,7 +373,7 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 	}
 
 	if len(posts) == 0 {
-		return nil, pgx.ErrNoRows
+		return []*model.FullPost{}, nil
 	}
 
 	return posts, nil
@@ -536,7 +535,121 @@ func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit in
 	}
 
 	if len(posts) == 0 {
-		return nil, pgx.ErrNoRows
+		return []*model.FullPost{}, nil
+	}
+
+	return posts, nil
+}
+
+func (r *postRepo) GetTrending(ctx context.Context, hours, limit int) ([]*model.FullPost, error) {
+	maxLimit(&limit)
+
+	since := time.Now().Add(-time.Duration(hours) * time.Hour)
+
+	rows, err := r.db.Query(
+		ctx,
+		`
+		SELECT
+		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at,
+		u.username, u.display_name, u.avatar_url,
+		i.url, i.position,
+		t.tag
+		FROM posts p
+		JOIN cached_users u ON p.author_id = u.id
+		LEFT JOIN post_images i ON p.id = i.post_id
+		LEFT JOIN post_tags t ON p.id = t.post_id
+		WHERE p.created_at >= $1
+		ORDER BY p.likes DESC, p.views DESC
+		LIMIT $2
+		`,
+		since, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	postsMap := make(map[int64]*model.FullPost)
+	for rows.Next() {
+		var (
+			id int64
+			authorID uuid.UUID
+			title string
+			content string
+			views int64
+			likes int64
+			createdAt time.Time
+			updatedAt time.Time
+			username string
+			displayName *string
+			avatarURL *string
+			imageURL *string
+			imagePosition *int
+			tag *string
+		)
+		if err := rows.Scan(
+			&id,
+			&authorID,
+			&title,
+			&content,
+			&views,
+			&likes,
+			&createdAt,
+			&updatedAt,
+			&username,
+			&displayName,
+			&avatarURL,
+			&imageURL,
+			&imagePosition,
+			&tag,
+		); err != nil {
+			return nil, err
+		}
+
+		post, exists := postsMap[id]
+		if !exists {
+			post = &model.FullPost{
+				Post: model.Post{
+					ID: id,
+					AuthorID: authorID,
+					Title: title,
+					Content: content,
+					Views: views,
+					Likes: likes,
+					CreatedAt: createdAt,
+					UpdatedAt: updatedAt,
+				},
+				Author: model.UserAuthor{
+					Username: username,
+					DisplayName: displayName,
+					AvatarURL: avatarURL,
+				},
+				Images: []*model.PostImage{},
+				Tags: []string{},
+			}
+			postsMap[id] = post
+		}
+
+		if imageURL != nil && imagePosition != nil {
+			postsMap[post.Post.ID].Images = append(postsMap[post.Post.ID].Images, &model.PostImage{URL: *imageURL, Position: *imagePosition})
+		}
+
+		if tag != nil {
+			postsMap[post.Post.ID].Tags = append(postsMap[post.Post.ID].Tags, *tag)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var posts []*model.FullPost
+	for _, post := range postsMap {
+		posts = append(posts, post)
+	}
+
+	if len(posts) == 0 {
+		return []*model.FullPost{}, nil
 	}
 
 	return posts, nil

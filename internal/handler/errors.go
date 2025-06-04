@@ -7,4 +7,5 @@ var (
 	errPositionMustBeInt = errors.New("position must be int")
 	errInvalidPostID = errors.New("invalid post ID")
 	errInvalidID = errors.New("invalid ID")
+	errHoursAndLimitMustBeInt = errors.New("hours and limit must be int")
 )
