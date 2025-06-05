@@ -4,6 +4,7 @@
 
 ### API Docs
 `/api/v1` - base url
+
 *Query parameters are in* [ ]
 
 **Headers**:
