@@ -3,7 +3,7 @@
 #### Please note that the main code under development is in the [dev](https://github.com/BloggingApp/post-service/tree/dev) branch
 
 ### API Docs
-`/api/v1` - base url
+`/api/v1` - base uri  
 *Query parameters are in* [ ]
 
 **Headers**:
