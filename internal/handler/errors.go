@@ -8,4 +8,5 @@ var (
 	errInvalidPostID = errors.New("invalid post ID")
 	errInvalidID = errors.New("invalid ID")
 	errHoursAndLimitMustBeInt = errors.New("hours and limit must be int")
+	errLimitAndOffsetMustBeInt = errors.New("limit and offset must be int")
 )

@@ -20,6 +20,7 @@ const (
 	COMMENT_LIKES_KEY_PATTERN = "comment-likes:*"
 	IS_LIKED_COMMENT_KEY = "user:%s-is-liked-comment:%d" // <userID>:<commentID>
 	TRENDING_POSTS_KEY = "trending-posts:%d" // <limit>
+	SEARCH_POSTS_RESULT_BY_TITLE_KEY = "search-posts-result-by-title:%s:%d:%d" // <title>:<limit>:<offset>
 )
 
 func PostKey(postID int64) string {
@@ -88,4 +89,8 @@ func IsLikedCommentKey(userID string, commentID int64) string {
 
 func TrendingPostsKey(limit int) string {
 	return fmt.Sprintf(TRENDING_POSTS_KEY, limit)
+}
+
+func SearchPostsResultByTitleKey(title string, limit, offset int) string {
+	return fmt.Sprintf(SEARCH_POSTS_RESULT_BY_TITLE_KEY, title, limit, offset)
 }

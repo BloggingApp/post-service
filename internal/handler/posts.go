@@ -204,3 +204,21 @@ func (h *Handler) postsTrending(c *gin.Context) {
 
 	c.JSON(http.StatusOK, posts)
 }
+
+func (h *Handler) postsSearchByTitle(c *gin.Context) {
+	limit, err0 := strconv.Atoi(c.Query("limit"))
+	offset, err1 := strconv.Atoi(c.Query("offset"))
+	if err0 != nil || err1 != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, errLimitAndOffsetMustBeInt.Error()))
+		return
+	}
+	title := c.Query("title")
+
+	result, err := h.services.Post.SearchByTitle(c.Request.Context(), title, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
