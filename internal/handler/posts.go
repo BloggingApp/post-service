@@ -189,7 +189,7 @@ func (h *Handler) postsGetLiked(c *gin.Context) {
 }
 
 func (h *Handler) postsTrending(c *gin.Context) {
-	hours, err0 := strconv.Atoi(c.Query("h"))
+	hours, err0 := strconv.Atoi(c.Query("hours"))
 	limit, err1 := strconv.Atoi(c.Query("limit"))
 	if err0 != nil || err1 != nil {
 		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, errHoursAndLimitMustBeInt.Error()))
@@ -212,7 +212,7 @@ func (h *Handler) postsSearchByTitle(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, errLimitAndOffsetMustBeInt.Error()))
 		return
 	}
-	title := c.Query("title")
+	title := c.Query("q")
 
 	result, err := h.services.Post.SearchByTitle(c.Request.Context(), title, limit, offset)
 	if err != nil {
