@@ -658,6 +658,8 @@ func (r *postRepo) GetTrending(ctx context.Context, hours, limit int) ([]*model.
 func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offset int) ([]*model.FullPost, error) {
 	maxLimit(&limit)
 
+	search := "%" + title + "%"
+
 	rows, err := r.db.Query(
 		ctx,
 		`
@@ -670,11 +672,11 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 		JOIN cached_users u ON p.author_id = u.id
 		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
-		WHERE p.title LIKE %$1%
+		WHERE p.title LIKE $1
 		ORDER BY p.created_at DESC, p.updated_at DESC
 		LIMIT $2
 		OFFSET $3
-		`, title, limit, offset,
+		`, search, limit, offset,
 	)
 	if err != nil {
 		return nil, err
