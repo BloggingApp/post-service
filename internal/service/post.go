@@ -394,6 +394,30 @@ func (s *postService) GetTrending(ctx context.Context, hours, limit int) ([]*mod
 	return posts, nil
 }
 
+func (s *postService) SearchByTitle(ctx context.Context, title string, limit, offset int) ([]*model.FullPost, error) {
+	resultCache, err := redisrepo.GetMany[model.FullPost](s.repo.Redis.Default, ctx, redisrepo.SearchPostsResultByTitleKey(title, limit, offset))
+	if err == nil {
+		return resultCache, nil
+	}
+	if err != redis.Nil {
+		s.logger.Sugar().Errorf("failed to get posts search result by title(%s) from redis: %s", title, err.Error())
+		return nil, ErrInternal
+	}
+
+	result, err := s.repo.Postgres.Post.SearchByTitle(ctx, title, limit, offset)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to get posts search result by title(%s) from postgres: %s", title, err.Error())
+		return nil, ErrInternal
+	}
+
+	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.SearchPostsResultByTitleKey(title, limit, offset), result, time.Minute); err != nil {
+		s.logger.Sugar().Errorf("failed to set posts search result by title(%s) in redis: %s", title, err.Error())
+		return nil, ErrInternal
+	}
+
+	return result, nil
+}
+
 func (s *postService) SchedulePostLikesUpdates() {
 	s.scheduler.NewJob(gocron.DurationJob(POST_LIKES_UPDATE_TIMEOUT), gocron.NewTask(func(ctx context.Context) {
 		if err := s.postsBatchLikesUpdate(ctx); err != nil {

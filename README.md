@@ -4,6 +4,7 @@
 
 ### API Docs
 `/api/v1` - base url
+*Query parameters are in* [ ]
 
 **Headers**:
 - **`Authorization`**: Bearer `<ACCESS_TOKEN>`
@@ -17,6 +18,8 @@
 - **`[AUTH]` GET** -> `/my` - *get my posts*
 - **`[PUB]` GET** -> `/author/:<userID>` - *get `:userID`'s posts*
 - **`[AUTH]` GET** -> `/liked` - *get user liked posts*
+- **`[AUTH]` GET** -> `/trending [hours, limit]` - *get trending posts*
+- **`[AUTH]` GET** -> `/search [q, limit, offset]`
 
 - **`[PUB]` GET** -> `/:<postID>` - *get post by `:postID`*
 - **`[AUTH]` GET** -> `/:<postID>/isLiked` - *get if user has liked the post*
