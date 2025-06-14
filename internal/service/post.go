@@ -95,11 +95,11 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 		}
 	}
 
-	if err := s.removeImagesFromTempToPerm(ctx, removes); err != nil {
+	if err := s.moveImagesFromTempToPerm(ctx, removes); err != nil {
 		s.logger.Sugar().Errorf("failed to move user(%s)'s post images from temp to perm: %s", authorID.String(), err.Error())
 		return nil, ErrInternal
 	}
-
+	
 	postCreatedMsg := dto.MQPostCreatedMsg{
 		PostID: createdPost.ID,
 		UserID: authorID,
@@ -202,10 +202,10 @@ func (s *postService) extractPathFromURL(url string) string {
 	return u.Path
 }
 
-func (s *postService) removeImagesFromTempToPerm(ctx context.Context, removes map[string]string) error {
-	jsonBody, _ := json.Marshal(removes)
+func (s *postService) moveImagesFromTempToPerm(ctx context.Context, moves map[string]string) error {
+	jsonBody, _ := json.Marshal(moves)
 
-	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/remove", bytes.NewReader(jsonBody))
+	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/move", bytes.NewReader(jsonBody))
 	if err != nil {
 		return err
 	}
