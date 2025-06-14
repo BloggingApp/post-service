@@ -125,6 +125,9 @@ func (s *postService) extractPathFromURL(url string) string {
 	if err != nil {
 		return ""
 	}
+	if strings.HasSuffix(u.Path, "/") {
+		u.Path = u.Path[:len(u.Path)-1]
+	}
 	return u.Path
 }
 
