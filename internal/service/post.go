@@ -55,6 +55,8 @@ const (
 	COMMENT_LIKES_UPDATE_TIMEOUT = time.Minute * 2
 )
 
+var REGEXP_TO_GET_IMAGES = regexp.MustCompile(`!\[.*?\]\((.*?)\)`)
+
 func (s *postService) UploadTempPostImage(ctx context.Context, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
 	filePath := "/post-images/temp/" + uuid.NewString() + uuid.NewString() + "." + filepath.Ext(fileHeader.Filename)
 	return s.uploadImageToFileStorage(filePath, file, fileHeader)
@@ -73,8 +75,7 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 		return nil, ErrInternal
 	}
 
-	var re = regexp.MustCompile(`!\[.*?\]\((.*?)\)`)
-	matches := re.FindAllStringSubmatch(post.Content, -1)
+	matches := REGEXP_TO_GET_IMAGES.FindAllStringSubmatch(post.Content, -1)
 
 	moves := make(map[string]string)
 
@@ -86,7 +87,7 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 
 		if strings.Contains(url, "/temp/") {
 			oldPath := s.extractPathFromURL(url)
-			newPath := strings.Replace("/temp/", oldPath, "/perm/", 1)
+			newPath := strings.Replace(oldPath, "/temp/", "/perm/", 1)
 
 			moves[oldPath] = newPath
 
@@ -138,7 +139,7 @@ func (s *postService) moveImagesFromTempToPerm(moves map[string]string) error {
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to move file")
+		return fmt.Errorf("failed to move files")
 	}
 
 	return nil
@@ -461,6 +462,103 @@ func (s *postService) SearchByTitle(ctx context.Context, title string, limit, of
 }
 
 func (s *postService) Edit(ctx context.Context, dto dto.EditPostRequest) error {
+	post, err := s.repo.Postgres.Post.FindByID(ctx, dto.ID)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to get post(%d) from postres: %s", dto.ID, err.Error())
+		return ErrInternal
+	}
+
+	updates := make(map[string]any)
+
+	if dto.Content != nil {
+		editedContent := *dto.Content
+
+		newUrls := []string{}
+		oldUrls := []string{}
+
+		matches := REGEXP_TO_GET_IMAGES.FindAllStringSubmatch(editedContent, -1)
+
+		moves := make(map[string]string)
+
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+			url := match[1]
+			newUrls = append(newUrls, url)
+
+			if strings.Contains(url, "/temp/") {
+				oldPath := s.extractPathFromURL(url)
+				newPath := strings.Replace(oldPath, "/temp/", "/perm/", 1)
+
+				moves[oldPath] = newPath
+
+				newURL := strings.Replace(url, "/temp", "/perm/", 1)
+				editedContent = strings.ReplaceAll(editedContent, url, newURL)
+			}
+		}
+
+		if err := s.moveImagesFromTempToPerm(moves); err != nil {
+			s.logger.Sugar().Errorf("failed to move user(%s)'s post images from temp to perm: %s", post.Post.AuthorID.String(), err.Error())
+			return ErrInternal
+		}
+
+		matches = REGEXP_TO_GET_IMAGES.FindAllStringSubmatch(post.Post.Content, -1)
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+			url := match[1]
+			oldUrls = append(oldUrls, url)
+		}
+
+		for i, oldUrl := range oldUrls {
+			for _, newUrl := range newUrls {
+				if oldUrl == newUrl {
+					oldUrls = append(oldUrls[:i], oldUrl[i+1:])
+				}
+			}
+		}
+
+		removedUrls := []string{}
+		for _, url := range oldUrls {
+			removedUrls = append(removedUrls, s.extractPathFromURL(url))
+		}
+
+		if err := s.deletePostImages(removedUrls); err != nil {
+			s.logger.Sugar().Errorf("failed to delete post(%d) removed urls: %s", post.Post.ID, err.Error())
+			return ErrInternal
+		}
+
+		updates["content"] = editedContent
+	}
+
+	if dto.Title != nil {
+		updates["title"] = *dto.Title
+	}
+
+	if err := s.repo.Postgres.Post.UpdateByID(ctx, post.Post.ID, updates); err != nil {
+		s.logger.Sugar().Errorf("failed to update post(%d): %s", post.Post.ID, err.Error())
+		return ErrInternal
+	}
+
+	return nil
+}
+
+func (s *postService) deletePostImages(urls []string) error {
+	jsonBody, _ := json.Marshal(urls)
+
+	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/delete", bytes.NewReader(jsonBody))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to delete files")
+	}
+
 	return nil
 }
 
