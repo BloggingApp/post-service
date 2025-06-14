@@ -520,12 +520,12 @@ func (s *postService) Edit(ctx context.Context, dto dto.EditPostRequest) error {
 			}
 		}
 
-		removedUrls := []string{}
+		removedPaths := []string{}
 		for _, url := range oldUrls {
-			removedUrls = append(removedUrls, s.extractPathFromURL(url))
+			removedPaths = append(removedPaths, s.extractPathFromURL(url))
 		}
 
-		if err := s.deletePostImages(removedUrls); err != nil {
+		if err := s.deletePostImages(removedPaths); err != nil {
 			s.logger.Sugar().Errorf("failed to delete post(%d) removed urls: %s", post.Post.ID, err.Error())
 			return ErrInternal
 		}
@@ -545,8 +545,8 @@ func (s *postService) Edit(ctx context.Context, dto dto.EditPostRequest) error {
 	return nil
 }
 
-func (s *postService) deletePostImages(urls []string) error {
-	jsonBody, _ := json.Marshal(urls)
+func (s *postService) deletePostImages(paths []string) error {
+	jsonBody, _ := json.Marshal(paths)
 
 	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/delete", bytes.NewReader(jsonBody))
 	if err != nil {
