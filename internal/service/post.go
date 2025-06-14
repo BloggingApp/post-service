@@ -94,7 +94,7 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 			post.Content = strings.ReplaceAll(post.Content, url, newURL)
 		}
 	}
-	
+
 	if err := s.moveImagesFromTempToPerm(moves); err != nil {
 		s.logger.Sugar().Errorf("failed to move user(%s)'s post images from temp to perm: %s", authorID.String(), err.Error())
 		return nil, ErrInternal
@@ -117,6 +117,31 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 	}
 
 	return createdPost, nil
+}
+
+func (s *postService) extractPathFromURL(url string) string {
+	u, err := urlpkg.Parse(url)
+	if err != nil {
+		return ""
+	}
+	return u.Path
+}
+
+func (s *postService) moveImagesFromTempToPerm(moves map[string]string) error {
+	jsonBody, _ := json.Marshal(moves)
+
+	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/move", bytes.NewReader(jsonBody))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to move file")
+	}
+
+	return nil
 }
 
 func (s *postService) uploadImageToFileStorage(path string, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
@@ -192,31 +217,6 @@ func (s *postService) uploadImageToFileStorage(path string, file multipart.File,
 	}
 
 	return string(body), nil
-}
-
-func (s *postService) extractPathFromURL(url string) string {
-	u, err := urlpkg.Parse(url)
-	if err != nil {
-		return ""
-	}
-	return u.Path
-}
-
-func (s *postService) moveImagesFromTempToPerm(moves map[string]string) error {
-	jsonBody, _ := json.Marshal(moves)
-
-	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/move", bytes.NewReader(jsonBody))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to move file")
-	}
-
-	return nil
 }
 
 func (s *postService) FindByID(ctx context.Context, id int64) (*model.FullPost, error) {
