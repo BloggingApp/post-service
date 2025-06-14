@@ -18,7 +18,7 @@ func maxLimit(limit *int) {
 }
 
 type Post interface {
-	Create(ctx context.Context, post model.Post, images []*model.PostImage, tags []string) (*model.Post, error)
+	Create(ctx context.Context, post model.Post, tags []string) (*model.Post, error)
 	FindByID(ctx context.Context, id int64) (*model.FullPost, error)
 	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
 	SearchByTags(ctx context.Context, tags []string, limit int, offset int) ([]*model.FullPost, error)
@@ -30,6 +30,7 @@ type Post interface {
 	FindUserLikes(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*model.FullPost, error)
 	GetTrending(ctx context.Context, hours, limit int) ([]*model.FullPost, error)
 	SearchByTitle(ctx context.Context, title string, limit, offset int) ([]*model.FullPost, error)
+	UpdateByID(ctx context.Context, id int64, fields map[string]interface{}) error
 }
 
 type Comment interface {

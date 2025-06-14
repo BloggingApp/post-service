@@ -8,6 +8,10 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	urlpkg "net/url"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/BloggingApp/post-service/internal/dto"
@@ -51,35 +55,48 @@ const (
 	COMMENT_LIKES_UPDATE_TIMEOUT = time.Minute * 2
 )
 
-func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.CreatePostRequest, imagesDto []dto.CreatePostImagesRequest) (*model.Post, error) {
+func (s *postService) UploadPostImage(ctx context.Context, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
+	filePath := "/post-images/temp/" + uuid.NewString() + uuid.NewString() + "." + filepath.Ext(fileHeader.Filename)
+	return s.uploadImageToFileStorage(filePath, file, fileHeader)
+}
+
+func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.CreatePostRequest) (*model.Post, error) {
 	post := model.Post{
 		AuthorID: authorID,
 		Title: req.Title,
 		Content: req.Content,
 	}
 
-	var images []*model.PostImage
-	for _, img := range imagesDto {
-		file, err := img.FileHeader.Open()
-		if err != nil {
-			s.logger.Sugar().Errorf("failed to open file: %s", err.Error())
-			return nil, ErrInternal
-		}
-		defer file.Close()
-
-		uploadPath := "post-images"
-
-		returnedURL, err := s.uploadImageToCDN(uploadPath, file, img.FileHeader)
-		if err != nil {
-			return nil, err
-		}
-
-		images = append(images, &model.PostImage{URL: returnedURL, Position: img.Position})
-	}
-
-	createdPost, err := s.repo.Postgres.Post.Create(ctx, post, images, req.Tags)
+	createdPost, err := s.repo.Postgres.Post.Create(ctx, post, req.Tags)
 	if err != nil {
 		s.logger.Sugar().Errorf("failed to create user(%s) post: %s", post.AuthorID.String(), err.Error())
+		return nil, ErrInternal
+	}
+
+	var re = regexp.MustCompile(`!\[.*?\]\((.*?)\)`)
+	matches := re.FindAllStringSubmatch(post.Content, -1)
+
+	moves := make(map[string]string)
+
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		url := match[1]
+
+		if strings.Contains(url, "/temp/") {
+			oldPath := s.extractPathFromURL(url)
+			newPath := strings.Replace("/temp/", oldPath, "/perm/", 1)
+
+			moves[oldPath] = newPath
+
+			newURL := strings.Replace(url, "/temp", "/perm/", 1)
+			post.Content = strings.ReplaceAll(post.Content, url, newURL)
+		}
+	}
+
+	if err := s.removeImagesFromTempToPerm(ctx, moves); err != nil {
+		s.logger.Sugar().Errorf("failed to move user(%s)'s post images from temp to perm: %s", authorID.String(), err.Error())
 		return nil, ErrInternal
 	}
 
@@ -102,9 +119,9 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 	return createdPost, nil
 }
 
-func (s *postService) uploadImageToCDN(path string, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
+func (s *postService) uploadImageToFileStorage(path string, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
 	endpoint := "/upload"
-	url := viper.GetString("cdn.origin") + endpoint
+	url := viper.GetString("file-storage.origin") + endpoint
 
 	var requestBody bytes.Buffer
 	writer := multipart.NewWriter(&requestBody)
@@ -175,6 +192,31 @@ func (s *postService) uploadImageToCDN(path string, file multipart.File, fileHea
 	}
 
 	return string(body), nil
+}
+
+func (s *postService) extractPathFromURL(url string) string {
+	u, err := urlpkg.Parse(url)
+	if err != nil {
+		return ""
+	}
+	return u.Path
+}
+
+func (s *postService) removeImagesFromTempToPerm(ctx context.Context, moves map[string]string) error {
+	jsonBody, _ := json.Marshal(moves)
+
+	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/move", bytes.NewReader(jsonBody))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to move file")
+	}
+
+	return nil
 }
 
 func (s *postService) FindByID(ctx context.Context, id int64) (*model.FullPost, error) {
@@ -416,6 +458,10 @@ func (s *postService) SearchByTitle(ctx context.Context, title string, limit, of
 	}
 
 	return result, nil
+}
+
+func (s *postService) Edit(ctx context.Context, dto dto.EditPostRequest) error {
+	return nil
 }
 
 func (s *postService) SchedulePostLikesUpdates() {

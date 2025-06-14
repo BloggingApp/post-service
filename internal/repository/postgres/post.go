@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/BloggingApp/post-service/internal/model"
@@ -22,7 +23,7 @@ func newPostRepo(db *pgxpool.Pool, logger *zap.Logger) Post {
 	}
 }
 
-func (r *postRepo) Create(ctx context.Context, post model.Post, images []*model.PostImage, tags []string) (*model.Post, error) {
+func (r *postRepo) Create(ctx context.Context, post model.Post, tags []string) (*model.Post, error) {
 	now := time.Now()
 	post.CreatedAt = now
 	post.UpdatedAt = now
@@ -45,13 +46,6 @@ func (r *postRepo) Create(ctx context.Context, post model.Post, images []*model.
 		post.Likes,
 	).Scan(&post.ID); err != nil {
 		return nil, err
-	}
-
-	for _, img := range images {
-		_, err := tx.Exec(ctx, "INSERT INTO post_images(post_id, url, position) VALUES($1, $2, $3)", post.ID, img.URL, img.Position)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	for _, tag := range tags {
@@ -767,4 +761,36 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 	}
 
 	return posts, nil
+}
+
+func (r *postRepo) UpdateByID(ctx context.Context, id int64, fields map[string]any) error {
+	allowedFields := []string{"title", "content"}
+	updates := map[string]any{}
+	for _, allowedField := range allowedFields {
+		for field, value := range fields {
+			if field == allowedField {
+				updates[field] = value
+			}
+		}
+	}
+
+	if len(updates) == 0 {
+		return nil
+	}
+
+	query := "UPDATE posts SET "
+	args := []interface{}{}
+	i := 1
+
+	for column, value := range updates {
+		query += (column + " = $" + strconv.Itoa(i) + ", ")
+		args = append(args, value)
+		i += 1
+	}
+
+	query = query[:len(query)-2] + " WHERE id = $" + strconv.Itoa(i)
+	args = append(args, id)
+
+	_, err := r.db.Exec(ctx, query, args...)
+	return err
 }
