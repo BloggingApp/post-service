@@ -55,7 +55,7 @@ const (
 	COMMENT_LIKES_UPDATE_TIMEOUT = time.Minute * 2
 )
 
-func (s *postService) UploadPostImage(ctx context.Context, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
+func (s *postService) UploadTempPostImage(ctx context.Context, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
 	filePath := "/post-images/temp/" + uuid.NewString() + uuid.NewString() + "." + filepath.Ext(fileHeader.Filename)
 	return s.uploadImageToFileStorage(filePath, file, fileHeader)
 }
@@ -76,7 +76,7 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 	var re = regexp.MustCompile(`!\[.*?\]\((.*?)\)`)
 	matches := re.FindAllStringSubmatch(post.Content, -1)
 
-	removes := make(map[string]string)
+	moves := make(map[string]string)
 
 	for _, match := range matches {
 		if len(match) < 2 {
@@ -88,14 +88,14 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 			oldPath := s.extractPathFromURL(url)
 			newPath := strings.Replace("/temp/", oldPath, "/perm/", 1)
 
-			removes[oldPath] = newPath
+			moves[oldPath] = newPath
 
 			newURL := strings.Replace(url, "/temp", "/perm/", 1)
 			post.Content = strings.ReplaceAll(post.Content, url, newURL)
 		}
 	}
-
-	if err := s.moveImagesFromTempToPerm(ctx, removes); err != nil {
+	
+	if err := s.moveImagesFromTempToPerm(moves); err != nil {
 		s.logger.Sugar().Errorf("failed to move user(%s)'s post images from temp to perm: %s", authorID.String(), err.Error())
 		return nil, ErrInternal
 	}
@@ -202,7 +202,7 @@ func (s *postService) extractPathFromURL(url string) string {
 	return u.Path
 }
 
-func (s *postService) moveImagesFromTempToPerm(ctx context.Context, moves map[string]string) error {
+func (s *postService) moveImagesFromTempToPerm(moves map[string]string) error {
 	jsonBody, _ := json.Marshal(moves)
 
 	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/move", bytes.NewReader(jsonBody))

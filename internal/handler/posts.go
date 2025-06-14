@@ -17,7 +17,7 @@ func (h *Handler) postsUploadImage(c *gin.Context) {
 		return
 	}
 
-	url, err := h.services.Post.UploadPostImage(c.Request.Context(), file, fileHeader)
+	url, err := h.services.Post.UploadTempPostImage(c.Request.Context(), file, fileHeader)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
 		return

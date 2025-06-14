@@ -21,7 +21,7 @@ func maxLimit(limit *int) {
 }
 
 type Post interface {
-	UploadPostImage(ctx context.Context, file multipart.File, fileHeader *multipart.FileHeader) (string, error)
+	UploadTempPostImage(ctx context.Context, file multipart.File, fileHeader *multipart.FileHeader) (string, error)
 	Create(ctx context.Context, authorID uuid.UUID, req dto.CreatePostRequest) (*model.Post, error)
 	FindByID(ctx context.Context, id int64) (*model.FullPost, error)
 	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
