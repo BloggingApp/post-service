@@ -76,7 +76,7 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 	var re = regexp.MustCompile(`!\[.*?\]\((.*?)\)`)
 	matches := re.FindAllStringSubmatch(post.Content, -1)
 
-	moves := make(map[string]string)
+	removes := make(map[string]string)
 
 	for _, match := range matches {
 		if len(match) < 2 {
@@ -88,14 +88,14 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 			oldPath := s.extractPathFromURL(url)
 			newPath := strings.Replace("/temp/", oldPath, "/perm/", 1)
 
-			moves[oldPath] = newPath
+			removes[oldPath] = newPath
 
 			newURL := strings.Replace(url, "/temp", "/perm/", 1)
 			post.Content = strings.ReplaceAll(post.Content, url, newURL)
 		}
 	}
 
-	if err := s.removeImagesFromTempToPerm(ctx, moves); err != nil {
+	if err := s.removeImagesFromTempToPerm(ctx, removes); err != nil {
 		s.logger.Sugar().Errorf("failed to move user(%s)'s post images from temp to perm: %s", authorID.String(), err.Error())
 		return nil, ErrInternal
 	}
@@ -202,10 +202,10 @@ func (s *postService) extractPathFromURL(url string) string {
 	return u.Path
 }
 
-func (s *postService) removeImagesFromTempToPerm(ctx context.Context, moves map[string]string) error {
-	jsonBody, _ := json.Marshal(moves)
+func (s *postService) removeImagesFromTempToPerm(ctx context.Context, removes map[string]string) error {
+	jsonBody, _ := json.Marshal(removes)
 
-	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/move", bytes.NewReader(jsonBody))
+	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/remove", bytes.NewReader(jsonBody))
 	if err != nil {
 		return err
 	}
