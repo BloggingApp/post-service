@@ -11,6 +11,7 @@ import (
 	urlpkg "net/url"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -464,25 +465,23 @@ func (s *postService) SearchByTitle(ctx context.Context, title string, limit, of
 	return result, nil
 }
 
-func (s *postService) Edit(ctx context.Context, dto dto.EditPostRequest) error {
-	post, err := s.repo.Postgres.Post.FindByID(ctx, dto.ID)
+func (s *postService) Edit(ctx context.Context, input dto.EditPostRequest) error {
+	post, err := s.repo.Postgres.Post.FindByID(ctx, input.PostID)
 	if err != nil {
-		s.logger.Sugar().Errorf("failed to get post(%d) from postres: %s", dto.ID, err.Error())
+		s.logger.Sugar().Errorf("failed to get post(%d) from postres: %s", input.PostID, err.Error())
 		return ErrInternal
 	}
 
 	updates := make(map[string]any)
 
-	if dto.Content != nil {
-		editedContent := *dto.Content
+	if input.Content != nil {
+		editedContent := *input.Content
 
 		newUrls := []string{}
 		oldUrls := []string{}
 
 		matches := REGEXP_TO_GET_IMAGES.FindAllStringSubmatch(editedContent, -1)
-
 		moves := make(map[string]string)
-
 		for _, match := range matches {
 			if len(match) < 2 {
 				continue
@@ -501,11 +500,13 @@ func (s *postService) Edit(ctx context.Context, dto dto.EditPostRequest) error {
 			}
 		}
 
+		// Moving new added images to post from temp to perm storage
 		if err := s.moveImagesFromTempToPerm(moves); err != nil {
 			s.logger.Sugar().Errorf("failed to move user(%s)'s post images from temp to perm: %s", post.Post.AuthorID.String(), err.Error())
 			return ErrInternal
 		}
 
+		// Getting old post images
 		matches = REGEXP_TO_GET_IMAGES.FindAllStringSubmatch(post.Post.Content, -1)
 		for _, match := range matches {
 			if len(match) < 2 {
@@ -515,17 +516,14 @@ func (s *postService) Edit(ctx context.Context, dto dto.EditPostRequest) error {
 			oldUrls = append(oldUrls, url)
 		}
 
-		for i, oldUrl := range oldUrls {
-			for _, newUrl := range newUrls {
-				if oldUrl == newUrl {
-					oldUrls = append(oldUrls[:i], oldUrl[i+1:])
-				}
-			}
-		}
-
+		// Retrieving removed images from post
 		removedPaths := []string{}
-		for _, url := range oldUrls {
-			removedPaths = append(removedPaths, s.extractPathFromURL(url))
+		for _, oldUrl := range oldUrls {
+			if slices.Contains(newUrls, oldUrl) {
+				continue
+			}
+
+			removedPaths = append(removedPaths, s.extractPathFromURL(oldUrl))
 		}
 
 		if err := s.deletePostImages(removedPaths); err != nil {
@@ -536,11 +534,11 @@ func (s *postService) Edit(ctx context.Context, dto dto.EditPostRequest) error {
 		updates["content"] = editedContent
 	}
 
-	if dto.Title != nil {
-		updates["title"] = *dto.Title
+	if input.Title != nil {
+		updates["title"] = *input.Title
 	}
 
-	if err := s.repo.Postgres.Post.UpdateByID(ctx, post.Post.ID, updates); err != nil {
+	if err := s.repo.Postgres.Post.Update(ctx, post.Post.ID, input.AuthorID, updates); err != nil {
 		s.logger.Sugar().Errorf("failed to update post(%d): %s", post.Post.ID, err.Error())
 		return ErrInternal
 	}
