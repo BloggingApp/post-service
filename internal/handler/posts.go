@@ -216,3 +216,21 @@ func (h *Handler) postsSearchByTitle(c *gin.Context) {
 
 	c.JSON(http.StatusOK, result)
 }
+
+func (h *Handler) postsEdit(c *gin.Context) {
+	user := h.getCachedUserFromRequest(c)
+
+	var input dto.EditPostRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+	input.AuthorID = user.ID
+
+	if err := h.services.Post.Edit(c.Request.Context(), input); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewBasicResponse(true, ""))
+}

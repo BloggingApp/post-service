@@ -763,7 +763,7 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 	return posts, nil
 }
 
-func (r *postRepo) UpdateByID(ctx context.Context, id int64, fields map[string]any) error {
+func (r *postRepo) Update(ctx context.Context, id int64, authorID uuid.UUID, fields map[string]any) error {
 	allowedFields := []string{"title", "content"}
 	updates := map[string]any{}
 	for _, allowedField := range allowedFields {
@@ -788,8 +788,8 @@ func (r *postRepo) UpdateByID(ctx context.Context, id int64, fields map[string]a
 		i += 1
 	}
 
-	query = query[:len(query)-2] + " WHERE id = $" + strconv.Itoa(i)
-	args = append(args, id)
+	query = query[:len(query)-2] + " WHERE id = $" + strconv.Itoa(i) + " AND author_id = $" + strconv.Itoa(i+1)
+	args = append(args, id, authorID)
 
 	_, err := r.db.Exec(ctx, query, args...)
 	return err

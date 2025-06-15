@@ -30,7 +30,7 @@ type Post interface {
 	FindUserLikes(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*model.FullPost, error)
 	GetTrending(ctx context.Context, hours, limit int) ([]*model.FullPost, error)
 	SearchByTitle(ctx context.Context, title string, limit, offset int) ([]*model.FullPost, error)
-	UpdateByID(ctx context.Context, id int64, fields map[string]interface{}) error
+	Update(ctx context.Context, id int64, authorID uuid.UUID, fields map[string]interface{}) error
 }
 
 type Comment interface {

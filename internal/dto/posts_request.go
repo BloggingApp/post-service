@@ -1,5 +1,7 @@
 package dto
 
+import "github.com/google/uuid"
+
 type CreatePostRequest struct {
 	Title   string   `json:"title" binding:"required,min=2"`
 	Content string   `json:"content" binding:"required,min=20"`
@@ -12,7 +14,8 @@ type GetPostsRequest struct {
 }
 
 type EditPostRequest struct {
-	ID      int64   `json:"id"`
-	Title   *string `json:"title"`
-	Content *string `json:"content"`
+	PostID   int64     `json:"id"`
+	AuthorID uuid.UUID `json:"author_id"`
+	Title    *string   `json:"title"`
+	Content  *string   `json:"content"`
 }
