@@ -1,19 +1,21 @@
 package dto
 
-import "mime/multipart"
+import "github.com/google/uuid"
 
 type CreatePostRequest struct {
-	Title   string   `form:"title" binding:"required,min=2"`
-	Content string   `form:"content" binding:"required,min=20"`
-	Tags    []string `form:"tags"`
-}
-
-type CreatePostImagesRequest struct {
-	Position   int                   `json:"position"`
-	FileHeader *multipart.FileHeader `json:"file"`
+	Title   string   `json:"title" binding:"required,min=2"`
+	Content string   `json:"content" binding:"required,min=20"`
+	Tags    []string `json:"tags"`
 }
 
 type GetPostsRequest struct {
 	Limit  int `json:"limit"`
 	Offset int `json:"offset"`
+}
+
+type EditPostRequest struct {
+	PostID   int64     `json:"id"`
+	AuthorID uuid.UUID `json:"author_id"`
+	Title    *string   `json:"title"`
+	Content  *string   `json:"content"`
 }

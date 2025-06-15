@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"mime/multipart"
 
 	"github.com/BloggingApp/post-service/internal/dto"
 	"github.com/BloggingApp/post-service/internal/model"
@@ -20,7 +21,8 @@ func maxLimit(limit *int) {
 }
 
 type Post interface {
-	Create(ctx context.Context, authorID uuid.UUID, req dto.CreatePostRequest, images []dto.CreatePostImagesRequest) (*model.Post, error)
+	UploadTempPostImage(ctx context.Context, file multipart.File, fileHeader *multipart.FileHeader) (string, error)
+	Create(ctx context.Context, authorID uuid.UUID, req dto.CreatePostRequest) (*model.Post, error)
 	FindByID(ctx context.Context, id int64) (*model.FullPost, error)
 	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
 	FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error)
@@ -28,6 +30,7 @@ type Post interface {
 	Like(ctx context.Context, postID int64, userID uuid.UUID, unlike bool) error
 	GetTrending(ctx context.Context, hours, limit int) ([]*model.FullPost, error)
 	SearchByTitle(ctx context.Context, title string, limit, offset int) ([]*model.FullPost, error)
+	Edit(ctx context.Context, dto dto.EditPostRequest) error
 	SchedulePostLikesUpdates()
 	StartScheduledJobs()
 }

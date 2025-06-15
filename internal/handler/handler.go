@@ -28,7 +28,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: []string{viper.GetString("client.origin")},
-		AllowMethods: []string{"POST", "GET"},
+		AllowMethods: []string{"POST", "GET", "PATCH", "DELETE"},
 		AllowCredentials: true,
 	}))
 	
@@ -36,12 +36,14 @@ func (h *Handler) InitRoutes() *gin.Engine {
 	{
 		posts := v1.Group("/posts")
 		{
+			posts.POST("/upload-image", h.authMiddleware, h.postsUploadImage)
 			posts.POST("", h.authMiddleware, h.postsCreate)
 			posts.GET("/my", h.authMiddleware, h.postsGetMy)
 			posts.GET("/author/:userID", h.postsGet)
 			posts.GET("/liked", h.authMiddleware, h.postsGetLiked)
 			posts.GET("/trending", h.authMiddleware, h.postsTrending)
 			posts.GET("/search", h.authMiddleware, h.postsSearchByTitle)
+			posts.PATCH("/edit", h.authMiddleware, h.postsEdit)
 
 			post := posts.Group("/:postID")
 			{

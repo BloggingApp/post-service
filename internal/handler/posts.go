@@ -10,6 +10,22 @@ import (
 	"github.com/google/uuid"
 )
 
+func (h *Handler) postsUploadImage(c *gin.Context) {
+	file, fileHeader, err := c.Request.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	url, err := h.services.Post.UploadTempPostImage(c.Request.Context(), file, fileHeader)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, url)
+}
+
 func (h *Handler) postsCreate(c *gin.Context) {
 	user := h.getCachedUserFromRequest(c)
 
@@ -19,29 +35,7 @@ func (h *Handler) postsCreate(c *gin.Context) {
 		return
 	}
 
-	form, err := c.MultipartForm()
-	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
-		return
-	}
-
-	var images []dto.CreatePostImagesRequest
-	for positionString, files := range form.File {
-		positionInt, err := strconv.Atoi(positionString)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, errPositionMustBeInt.Error()))
-			return
-		}
-
-		for _, file := range files {
-			images = append(images, dto.CreatePostImagesRequest{
-				Position: positionInt,
-				FileHeader: file,
-			})
-		}
-	}
-
-	createdPost, err := h.services.Post.Create(c.Request.Context(), user.ID, input, images)
+	createdPost, err := h.services.Post.Create(c.Request.Context(), user.ID, input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
 		return
@@ -221,4 +215,22 @@ func (h *Handler) postsSearchByTitle(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+func (h *Handler) postsEdit(c *gin.Context) {
+	user := h.getCachedUserFromRequest(c)
+
+	var input dto.EditPostRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+	input.AuthorID = user.ID
+
+	if err := h.services.Post.Edit(c.Request.Context(), input); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewBasicResponse(true, ""))
 }

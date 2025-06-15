@@ -8,6 +8,11 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	urlpkg "net/url"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/BloggingApp/post-service/internal/dto"
@@ -51,38 +56,52 @@ const (
 	COMMENT_LIKES_UPDATE_TIMEOUT = time.Minute * 2
 )
 
-func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.CreatePostRequest, imagesDto []dto.CreatePostImagesRequest) (*model.Post, error) {
+var REGEXP_TO_GET_IMAGES = regexp.MustCompile(`!\[.*?\]\((.*?)\)`)
+
+func (s *postService) UploadTempPostImage(ctx context.Context, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
+	filePath := "/post-images/temp/" + uuid.NewString() + uuid.NewString() + "." + filepath.Ext(fileHeader.Filename)
+	return s.uploadImageToFileStorage(filePath, file, fileHeader)
+}
+
+func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.CreatePostRequest) (*model.Post, error) {
 	post := model.Post{
 		AuthorID: authorID,
 		Title: req.Title,
 		Content: req.Content,
 	}
 
-	var images []*model.PostImage
-	for _, img := range imagesDto {
-		file, err := img.FileHeader.Open()
-		if err != nil {
-			s.logger.Sugar().Errorf("failed to open file: %s", err.Error())
-			return nil, ErrInternal
-		}
-		defer file.Close()
-
-		uploadPath := "post-images"
-
-		returnedURL, err := s.uploadImageToCDN(uploadPath, file, img.FileHeader)
-		if err != nil {
-			return nil, err
-		}
-
-		images = append(images, &model.PostImage{URL: returnedURL, Position: img.Position})
-	}
-
-	createdPost, err := s.repo.Postgres.Post.Create(ctx, post, images, req.Tags)
+	createdPost, err := s.repo.Postgres.Post.Create(ctx, post, req.Tags)
 	if err != nil {
 		s.logger.Sugar().Errorf("failed to create user(%s) post: %s", post.AuthorID.String(), err.Error())
 		return nil, ErrInternal
 	}
 
+	matches := REGEXP_TO_GET_IMAGES.FindAllStringSubmatch(post.Content, -1)
+
+	moves := make(map[string]string)
+
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		url := match[1]
+
+		if strings.Contains(url, "/temp/") {
+			oldPath := s.extractPathFromURL(url)
+			newPath := strings.Replace(oldPath, "/temp/", "/perm/", 1)
+
+			moves[oldPath] = newPath
+
+			newURL := strings.Replace(url, "/temp", "/perm/", 1)
+			post.Content = strings.ReplaceAll(post.Content, url, newURL)
+		}
+	}
+
+	if err := s.moveImagesFromTempToPerm(moves); err != nil {
+		s.logger.Sugar().Errorf("failed to move user(%s)'s post images from temp to perm: %s", authorID.String(), err.Error())
+		return nil, ErrInternal
+	}
+	
 	postCreatedMsg := dto.MQPostCreatedMsg{
 		PostID: createdPost.ID,
 		UserID: authorID,
@@ -102,9 +121,37 @@ func (s *postService) Create(ctx context.Context, authorID uuid.UUID, req dto.Cr
 	return createdPost, nil
 }
 
-func (s *postService) uploadImageToCDN(path string, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
+func (s *postService) extractPathFromURL(url string) string {
+	u, err := urlpkg.Parse(url)
+	if err != nil {
+		return ""
+	}
+	if strings.HasSuffix(u.Path, "/") {
+		u.Path = u.Path[:len(u.Path)-1]
+	}
+	return u.Path
+}
+
+func (s *postService) moveImagesFromTempToPerm(moves map[string]string) error {
+	jsonBody, _ := json.Marshal(moves)
+
+	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/move", bytes.NewReader(jsonBody))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to move files")
+	}
+
+	return nil
+}
+
+func (s *postService) uploadImageToFileStorage(path string, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
 	endpoint := "/upload"
-	url := viper.GetString("cdn.origin") + endpoint
+	url := viper.GetString("file-storage.origin") + endpoint
 
 	var requestBody bytes.Buffer
 	writer := multipart.NewWriter(&requestBody)
@@ -416,6 +463,104 @@ func (s *postService) SearchByTitle(ctx context.Context, title string, limit, of
 	}
 
 	return result, nil
+}
+
+func (s *postService) Edit(ctx context.Context, input dto.EditPostRequest) error {
+	post, err := s.repo.Postgres.Post.FindByID(ctx, input.PostID)
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to get post(%d) from postres: %s", input.PostID, err.Error())
+		return ErrInternal
+	}
+
+	updates := make(map[string]any)
+
+	if input.Content != nil {
+		editedContent := *input.Content
+
+		newUrls := []string{}
+		oldUrls := []string{}
+
+		matches := REGEXP_TO_GET_IMAGES.FindAllStringSubmatch(editedContent, -1)
+		moves := make(map[string]string)
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+			url := match[1]
+			newUrls = append(newUrls, url)
+
+			if strings.Contains(url, "/temp/") {
+				oldPath := s.extractPathFromURL(url)
+				newPath := strings.Replace(oldPath, "/temp/", "/perm/", 1)
+
+				moves[oldPath] = newPath
+
+				newURL := strings.Replace(url, "/temp", "/perm/", 1)
+				editedContent = strings.ReplaceAll(editedContent, url, newURL)
+			}
+		}
+
+		// Moving new added images to post from temp to perm storage
+		if err := s.moveImagesFromTempToPerm(moves); err != nil {
+			s.logger.Sugar().Errorf("failed to move user(%s)'s post images from temp to perm: %s", post.Post.AuthorID.String(), err.Error())
+			return ErrInternal
+		}
+
+		// Getting old post images
+		matches = REGEXP_TO_GET_IMAGES.FindAllStringSubmatch(post.Post.Content, -1)
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+			url := match[1]
+			oldUrls = append(oldUrls, url)
+		}
+
+		// Retrieving removed images from post
+		removedPaths := []string{}
+		for _, oldUrl := range oldUrls {
+			if slices.Contains(newUrls, oldUrl) {
+				continue
+			}
+
+			removedPaths = append(removedPaths, s.extractPathFromURL(oldUrl))
+		}
+
+		if err := s.deletePostImages(removedPaths); err != nil {
+			s.logger.Sugar().Errorf("failed to delete post(%d) removed urls: %s", post.Post.ID, err.Error())
+			return ErrInternal
+		}
+
+		updates["content"] = editedContent
+	}
+
+	if input.Title != nil {
+		updates["title"] = *input.Title
+	}
+
+	if err := s.repo.Postgres.Post.Update(ctx, post.Post.ID, input.AuthorID, updates); err != nil {
+		s.logger.Sugar().Errorf("failed to update post(%d): %s", post.Post.ID, err.Error())
+		return ErrInternal
+	}
+
+	return nil
+}
+
+func (s *postService) deletePostImages(paths []string) error {
+	jsonBody, _ := json.Marshal(paths)
+
+	req, err := http.NewRequest(http.MethodPost, viper.GetString("file-storage.origin") + "/delete", bytes.NewReader(jsonBody))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to delete files")
+	}
+
+	return nil
 }
 
 func (s *postService) SchedulePostLikesUpdates() {
