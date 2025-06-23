@@ -126,7 +126,7 @@ func (s *postService) extractPathFromURL(url string) string {
 	if err != nil {
 		return ""
 	}
-	if strings.HasSuffix(u.Path, "/") {
+	if u.Path[len(u.Path)-1] == '/' {
 		u.Path = u.Path[:len(u.Path)-1]
 	}
 	return u.Path
@@ -465,7 +465,7 @@ func (s *postService) SearchByTitle(ctx context.Context, title string, limit, of
 	return result, nil
 }
 
-func (s *postService) Edit(ctx context.Context, input dto.EditPostRequest) error {
+func (s *postService) Edit(ctx context.Context, input dto.EditPost) error {
 	post, err := s.repo.Postgres.Post.FindByID(ctx, input.PostID)
 	if err != nil {
 		s.logger.Sugar().Errorf("failed to get post(%d) from postres: %s", input.PostID, err.Error())

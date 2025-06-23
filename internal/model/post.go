@@ -11,6 +11,7 @@ type Post struct {
 	AuthorID  uuid.UUID `json:"author_id"`
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
+	FeedView  string    `json:"feed_view"`
 	Views     int64     `json:"views"`
 	Likes     int64     `json:"likes"`
 	CreatedAt time.Time `json:"created_at"`

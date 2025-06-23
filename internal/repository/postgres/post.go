@@ -38,10 +38,11 @@ func (r *postRepo) Create(ctx context.Context, post model.Post, tags []string) (
 
 	if err := tx.QueryRow(
 		ctx,
-		"INSERT INTO posts(author_id, title, content, views, likes) VALUES($1, $2, $3, $4, $5) RETURNING id",
+		"INSERT INTO posts(author_id, title, content, feed_view, views, likes) VALUES($1, $2, $3, $4, $5, $6) RETURNING id",
 		post.AuthorID,
 		post.Title,
 		post.Content,
+		post.FeedView,
 		post.Views,
 		post.Likes,
 	).Scan(&post.ID); err != nil {
@@ -66,7 +67,7 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 	rows, err := r.db.Query(
 		ctx,
 		`SELECT
-		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
 		FROM posts p
 		JOIN cached_users u ON p.author_id = u.id
 		LEFT JOIN post_images i ON p.id = i.post_id
@@ -86,6 +87,7 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 			authorID uuid.UUID
 			title string
 			content string
+			feedView string
 			views int64
 			likes int64
 			createdAt time.Time
@@ -102,6 +104,7 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 			&authorID,
 			&title,
 			&content,
+			&feedView,
 			&views,
 			&likes,
 			&createdAt,
@@ -124,6 +127,7 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 					AuthorID: authorID,
 					Title: title,
 					Content: content,
+					FeedView: feedView,
 					Views: views,
 					Likes: likes,
 					CreatedAt: createdAt,
@@ -171,7 +175,7 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 	rows, err := r.db.Query(
 		ctx,
 		`SELECT
-		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, i.url, i.position, t.tag
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, i.url, i.position, t.tag
 		FROM posts p
 		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
@@ -195,6 +199,7 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 			authorID uuid.UUID
 			title string
 			content string
+			feedView string
 			views int64
 			likes int64
 			createdAt time.Time
@@ -208,6 +213,7 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 			&authorID,
 			&title,
 			&content,
+			&feedView,
 			&views,
 			&likes,
 			&createdAt,
@@ -227,6 +233,7 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 					AuthorID: authorID,
 					Title: title,
 					Content: content,
+					FeedView: feedView,
 					Views: views,
 					Likes: likes,
 					CreatedAt: createdAt,
@@ -269,7 +276,7 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 	rows, err := r.db.Query(
 		ctx,
 		`SELECT
-		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
 		FROM posts p
 		JOIN cached_users u ON p.author_id = u.id
 		LEFT JOIN post_images i ON p.id = i.post_id
@@ -294,6 +301,7 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 			authorID uuid.UUID
 			title string
 			content string
+			feedView string
 			views int64
 			likes int64
 			createdAt time.Time
@@ -310,6 +318,7 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 			&authorID,
 			&title,
 			&content,
+			&feedView,
 			&views,
 			&likes,
 			&createdAt,
@@ -332,6 +341,7 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 					AuthorID: authorID,
 					Title: title,
 					Content: content,
+					FeedView: feedView,
 					Views: views,
 					Likes: likes,
 					CreatedAt: createdAt,
@@ -430,7 +440,7 @@ func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit in
 	rows, err := r.db.Query(
 		ctx,
 		`SELECT
-		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
 		FROM post_likes l
 		JOIN posts p ON l.post_id = p.id
 		JOIN cached_users u ON p.author_id = u.id
@@ -456,6 +466,7 @@ func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit in
 			authorID uuid.UUID
 			title string
 			content string
+			feedView string
 			views int64
 			likes int64
 			createdAt time.Time
@@ -472,6 +483,7 @@ func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit in
 			&authorID,
 			&title,
 			&content,
+			&feedView,
 			&views,
 			&likes,
 			&createdAt,
@@ -494,6 +506,7 @@ func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit in
 					AuthorID: authorID,
 					Title: title,
 					Content: content,
+					FeedView: feedView,
 					Views: views,
 					Likes: likes,
 					CreatedAt: createdAt,
@@ -544,7 +557,7 @@ func (r *postRepo) GetTrending(ctx context.Context, hours, limit int) ([]*model.
 		ctx,
 		`
 		SELECT
-		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at,
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at,
 		u.username, u.display_name, u.avatar_url,
 		i.url, i.position,
 		t.tag
@@ -570,6 +583,7 @@ func (r *postRepo) GetTrending(ctx context.Context, hours, limit int) ([]*model.
 			authorID uuid.UUID
 			title string
 			content string
+			feedView string
 			views int64
 			likes int64
 			createdAt time.Time
@@ -586,6 +600,7 @@ func (r *postRepo) GetTrending(ctx context.Context, hours, limit int) ([]*model.
 			&authorID,
 			&title,
 			&content,
+			&feedView,
 			&views,
 			&likes,
 			&createdAt,
@@ -608,6 +623,7 @@ func (r *postRepo) GetTrending(ctx context.Context, hours, limit int) ([]*model.
 					AuthorID: authorID,
 					Title: title,
 					Content: content,
+					FeedView: feedView,
 					Views: views,
 					Likes: likes,
 					CreatedAt: createdAt,
@@ -658,7 +674,7 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 		ctx,
 		`
 		SELECT
-		p.id, p.author_id, p.title, p.content, p.views, p.likes, p.created_at, p.updated_at,
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at,
 		u.username, u.display_name, u.avatar_url,
 		i.url, i.position,
 		t.tag
@@ -684,6 +700,7 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 			authorID uuid.UUID
 			title string
 			content string
+			feedView string
 			views int64
 			likes int64
 			createdAt time.Time
@@ -700,6 +717,7 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 			&authorID,
 			&title,
 			&content,
+			&feedView,
 			&views,
 			&likes,
 			&createdAt,
@@ -722,6 +740,7 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 					AuthorID: authorID,
 					Title: title,
 					Content: content,
+					FeedView: feedView,
 					Views: views,
 					Likes: likes,
 					CreatedAt: createdAt,
@@ -764,7 +783,7 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 }
 
 func (r *postRepo) Update(ctx context.Context, id int64, authorID uuid.UUID, fields map[string]any) error {
-	allowedFields := []string{"title", "content"}
+	allowedFields := []string{"title", "content", "feed_view"}
 	updates := map[string]any{}
 	for _, allowedField := range allowedFields {
 		for field, value := range fields {
