@@ -14,7 +14,7 @@ type GetPostsRequest struct {
 	Offset int `json:"offset"`
 }
 
-type EditPost struct {
+type EditPostRequest struct {
 	PostID   int64     `json:"id"`
 	AuthorID uuid.UUID `json:"author_id"`
 	Title    *string   `json:"title"`

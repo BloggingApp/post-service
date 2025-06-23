@@ -138,15 +138,11 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 					DisplayName: displayName,
 					AvatarURL: avatarURL,
 				},
-				Images: []*model.PostImage{},
 				Tags: []string{},
 			}
 			postMap[post.Post.ID] = post
 		}
 
-		if imageURL != nil && imagePosition != nil {
-			postMap[post.Post.ID].Images = append(postMap[post.Post.ID].Images, &model.PostImage{URL: *imageURL, Position: *imagePosition})
-		}
 
 		if tag != nil {
 			postMap[post.Post.ID].Tags = append(postMap[post.Post.ID].Tags, *tag)
@@ -239,14 +235,9 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
 				},
-				Images: []*model.PostImage{},
 				Tags: []string{},
 			}
 			postsMap[post.Post.ID] = post
-		}
-
-		if imageURL != nil && imagePosition != nil {
-			postsMap[post.Post.ID].Images = append(postsMap[post.Post.ID].Images, &model.PostImage{URL: *imageURL, Position: *imagePosition})
 		}
 
 		if tag != nil {
@@ -352,14 +343,9 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 					DisplayName: displayName,
 					AvatarURL: avatarURL,
 				},
-				Images: []*model.PostImage{},
 				Tags: []string{},
 			}
 			postsMap[id] = post
-		}
-
-		if imageURL != nil && imagePosition != nil {
-			postsMap[post.Post.ID].Images = append(postsMap[post.Post.ID].Images, &model.PostImage{URL: *imageURL, Position: *imagePosition})
 		}
 
 		if tag != nil {
@@ -517,14 +503,9 @@ func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit in
 					DisplayName: displayName,
 					AvatarURL: avatarURL,
 				},
-				Images: []*model.PostImage{},
 				Tags: []string{},
 			}
 			postsMap[id] = post
-		}
-
-		if imageURL != nil && imagePosition != nil {
-			postsMap[post.Post.ID].Images = append(postsMap[post.Post.ID].Images, &model.PostImage{URL: *imageURL, Position: *imagePosition})
 		}
 
 		if tag != nil {
@@ -634,14 +615,9 @@ func (r *postRepo) GetTrending(ctx context.Context, hours, limit int) ([]*model.
 					DisplayName: displayName,
 					AvatarURL: avatarURL,
 				},
-				Images: []*model.PostImage{},
 				Tags: []string{},
 			}
 			postsMap[id] = post
-		}
-
-		if imageURL != nil && imagePosition != nil {
-			postsMap[post.Post.ID].Images = append(postsMap[post.Post.ID].Images, &model.PostImage{URL: *imageURL, Position: *imagePosition})
 		}
 
 		if tag != nil {
@@ -751,14 +727,9 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 					DisplayName: displayName,
 					AvatarURL: avatarURL,
 				},
-				Images: []*model.PostImage{},
 				Tags: []string{},
 			}
 			postsMap[id] = post
-		}
-
-		if imageURL != nil && imagePosition != nil {
-			postsMap[post.Post.ID].Images = append(postsMap[post.Post.ID].Images, &model.PostImage{URL: *imageURL, Position: *imagePosition})
 		}
 
 		if tag != nil {

@@ -465,7 +465,7 @@ func (s *postService) SearchByTitle(ctx context.Context, title string, limit, of
 	return result, nil
 }
 
-func (s *postService) Edit(ctx context.Context, input dto.EditPost) error {
+func (s *postService) Edit(ctx context.Context, input dto.EditPostRequest) error {
 	post, err := s.repo.Postgres.Post.FindByID(ctx, input.PostID)
 	if err != nil {
 		s.logger.Sugar().Errorf("failed to get post(%d) from postres: %s", input.PostID, err.Error())

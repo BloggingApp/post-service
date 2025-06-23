@@ -220,7 +220,7 @@ func (h *Handler) postsSearchByTitle(c *gin.Context) {
 func (h *Handler) postsEdit(c *gin.Context) {
 	user := h.getCachedUserFromRequest(c)
 
-	var input dto.EditPost
+	var input dto.EditPostRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
 		return

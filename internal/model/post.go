@@ -21,12 +21,10 @@ type Post struct {
 type FullPost struct {
 	Post   Post         `json:"post"`
 	Author UserAuthor   `json:"author"`
-	Images []*PostImage `json:"images"`
 	Tags   []string     `json:"tags"`
 }
 
 type AuthorPost struct {
 	Post   Post         `json:"post"`
-	Images []*PostImage `json:"images"`
 	Tags   []string     `json:"tags"`
 }
