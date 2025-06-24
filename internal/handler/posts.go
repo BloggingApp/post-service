@@ -27,7 +27,7 @@ func (h *Handler) postsUploadImage(c *gin.Context) {
 }
 
 func (h *Handler) postsCreate(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	var input dto.CreatePostRequest
 	if err := c.ShouldBind(&input); err != nil {
@@ -45,7 +45,7 @@ func (h *Handler) postsCreate(c *gin.Context) {
 }
 
 func (h *Handler) postsGetMy(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	var input dto.GetPostsRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -63,7 +63,7 @@ func (h *Handler) postsGetMy(c *gin.Context) {
 }
 
 func (h *Handler) postsGetByID(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	postIDString := strings.TrimSpace(c.Param("postID"))
 	postID, err := strconv.Atoi(postIDString)
@@ -114,7 +114,7 @@ func (h *Handler) postsGet(c *gin.Context) {
 }
 
 func (h *Handler) postsIsLiked(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	postIDString := c.Param("postID")
 	postID, err := strconv.Atoi(postIDString)
@@ -129,7 +129,7 @@ func (h *Handler) postsIsLiked(c *gin.Context) {
 }
 
 func (h *Handler) postsLike(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	postIDString := c.Param("postID")
 	postID, err := strconv.Atoi(postIDString)
@@ -147,7 +147,7 @@ func (h *Handler) postsLike(c *gin.Context) {
 }
 
 func (h *Handler) postsUnlike(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	postIDString := c.Param("postID")
 	postID, err := strconv.Atoi(postIDString)
@@ -165,7 +165,7 @@ func (h *Handler) postsUnlike(c *gin.Context) {
 }
 
 func (h *Handler) postsGetLiked(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	var input dto.GetPostsRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -218,7 +218,7 @@ func (h *Handler) postsSearchByTitle(c *gin.Context) {
 }
 
 func (h *Handler) postsEdit(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	var input dto.EditPostRequest
 	if err := c.ShouldBindJSON(&input); err != nil {

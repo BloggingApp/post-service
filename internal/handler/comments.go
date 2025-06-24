@@ -10,7 +10,7 @@ import (
 )
 
 func (h *Handler) commentsCreate(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	var input dto.CreateCommentDto
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -78,7 +78,7 @@ func (h *Handler) commentsGetReplies(c *gin.Context) {
 }
 
 func (h *Handler) commentsDelete(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	postIDString := strings.TrimSpace(c.Param("postID"))
 	postID, err0 := strconv.Atoi(postIDString)
@@ -100,7 +100,7 @@ func (h *Handler) commentsDelete(c *gin.Context) {
 }
 
 func (h *Handler) commentsIsLiked(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	commentIDString := strings.TrimSpace(c.Param("commentID"))
 	commentID, err := strconv.Atoi(commentIDString)
@@ -115,7 +115,7 @@ func (h *Handler) commentsIsLiked(c *gin.Context) {
 }
 
 func (h *Handler) commentsLike(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	commentIDString := strings.TrimSpace(c.Param("commentID"))
 	commentID, err := strconv.Atoi(commentIDString)
@@ -133,7 +133,7 @@ func (h *Handler) commentsLike(c *gin.Context) {
 }
 
 func (h *Handler) commentsUnlike(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	commentIDString := strings.TrimSpace(c.Param("commentID"))
 	commentID, err := strconv.Atoi(commentIDString)

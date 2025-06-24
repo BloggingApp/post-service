@@ -52,6 +52,7 @@ type UserCache interface {
 	Update(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
 	FindByID(ctx context.Context, id uuid.UUID) (*model.CachedUser, error)
 	consumeUserUpdates(ctx context.Context)
+	consumeUsersCreate(ctx context.Context)
 }
 
 type Service struct {
@@ -69,6 +70,7 @@ func New(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQC
 }
 
 func (s *Service) StartConsumeAll(ctx context.Context) {
+	go s.UserCache.consumeUsersCreate(ctx)
 	go s.UserCache.consumeUserUpdates(ctx)
 }
 
