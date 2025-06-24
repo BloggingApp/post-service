@@ -768,10 +768,11 @@ func (r *postRepo) Update(ctx context.Context, id int64, authorID uuid.UUID, fie
 		return nil
 	}
 
-	query := "UPDATE posts SET "
+	query := "UPDATE posts SET updated_at = $1, "
 	args := []interface{}{}
-	i := 1
+	i := 2
 
+	args = append(args, time.Now())
 	for column, value := range updates {
 		query += (column + " = $" + strconv.Itoa(i) + ", ")
 		args = append(args, value)
