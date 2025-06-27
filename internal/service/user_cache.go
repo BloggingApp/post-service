@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 	"time"
-
+	
 	"github.com/BloggingApp/post-service/internal/model"
 	"github.com/BloggingApp/post-service/internal/rabbitmq"
 	"github.com/BloggingApp/post-service/internal/repository"
@@ -151,17 +151,42 @@ func (s *userCacheService) FindByID(ctx context.Context, id uuid.UUID) (*model.C
 	return user, nil
 }
 
-func (s *userCacheService) consumeUserUpdates(ctx context.Context) {
-	queue := rabbitmq.USER_INFO_UPDATED_QUEUE
-	msgs, err := s.rabbitmq.Consume(queue)
+func (s *userCacheService) consumeUsersCreate(ctx context.Context) {
+	exchange := rabbitmq.USERS_CREATED_EXCHANGE
+	msgs, err := s.rabbitmq.ConsumeExchange(exchange)
 	if err != nil {
-		s.logger.Sugar().Fatalf("failed to start consume updates from queue(%s): %s", queue, err.Error())
+		s.logger.Sugar().Fatalf("failed to start consume users create from queue(%s): %s", exchange, err.Error())
+	}
+
+	for msg := range msgs {
+		var data model.CachedUser
+		if err := json.Unmarshal(msg.Body, &data); err != nil {
+			s.logger.Sugar().Errorf("failed to unmarshal json in exchange(%s): %s", exchange, err.Error())
+			msg.Ack(false)
+			continue
+		}
+
+		if err := s.Create(ctx, data); err != nil {
+			s.logger.Sugar().Errorf("failed to create user(%s) in exchange(%s): %s", data.ID.String(), exchange, err.Error())
+			msg.Ack(false)
+			continue
+		}
+
+		msg.Ack(false)
+	}
+}
+
+func (s *userCacheService) consumeUserUpdates(ctx context.Context) {
+	exchange := rabbitmq.USERS_UPDATED_EXCHANGE
+	msgs, err := s.rabbitmq.ConsumeExchange(exchange)
+	if err != nil {
+		s.logger.Sugar().Fatalf("failed to start consume updates from exchange(%s): %s", exchange, err.Error())
 	}
 
 	for msg := range msgs {
 		var data map[string]interface{}
 		if err := json.Unmarshal(msg.Body, &data); err != nil {
-			s.logger.Sugar().Errorf("failed to unmarshal json in queue(%s): %s", queue, err.Error())
+			s.logger.Sugar().Errorf("failed to unmarshal json in exchange(%s): %s", exchange, err.Error())
 			msg.Ack(false)
 			continue
 		}

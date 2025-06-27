@@ -272,19 +272,71 @@ func (s *postService) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, l
 		return cachedPosts, nil
 	}
 	if err != redis.Nil {
-		s.logger.Sugar().Errorf("failed to get author(%s) posts from redis: %s", authorID.String(), err.Error())
+		s.logger.Sugar().Errorf("failed to get author(%s)'s posts from redis: %s", authorID.String(), err.Error())
 		return nil, ErrInternal
 	}
 
 	posts, err := s.repo.Postgres.Post.FindAuthorPosts(ctx, authorID, limit, offset)
 	if err != nil && err != pgx.ErrNoRows {
-		s.logger.Sugar().Errorf("failed to find author(%s) posts from postgres: %s", authorID.String(), err.Error())
-		return nil, err
+		s.logger.Sugar().Errorf("failed to find author(%s)'s posts from postgres: %s", authorID.String(), err.Error())
+		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.AuthorPostsKey(authorID.String(), limit, offset), posts, time.Hour); err != nil {
-		s.logger.Sugar().Errorf("failed to set author(%s) posts in redis: %s", authorID.String(), err.Error())
-		return nil, err
+	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.AuthorPostsKey(authorID.String(), limit, offset), posts, time.Minute); err != nil {
+		s.logger.Sugar().Errorf("failed to set author(%s)'s posts in redis: %s", authorID.String(), err.Error())
+		return nil, ErrInternal
+	}
+
+	return posts, nil
+}
+
+func (s *postService) FindUserNotValidatedPosts(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*model.AuthorPost, error) {
+	maxLimit(&limit)
+
+	cachedPosts, err := redisrepo.GetMany[model.AuthorPost](s.repo.Redis.Default, ctx, redisrepo.UserNotValidatedPostsKey(userID.String(), limit, offset))
+	if err == nil {
+		return cachedPosts, nil
+	}
+	if err != redis.Nil {
+		s.logger.Sugar().Errorf("failed to get user(%s)'s not validated posts from redis: %s", userID.String(), err.Error())
+		return nil, ErrInternal
+	}
+
+	posts, err := s.repo.Postgres.Post.FindUserNotValidatedPosts(ctx, userID, limit, offset)
+	if err != nil && err != pgx.ErrNoRows {
+		s.logger.Sugar().Errorf("failed to find user(%s)'s not validated posts from postgres: %s", userID.String(), err.Error())
+		return nil, ErrInternal
+	}
+
+	if err := s.repo.Redis.SetJSON(ctx, redisrepo.UserNotValidatedPostsKey(userID.String(), limit, offset), posts, time.Minute); err != nil {
+		s.logger.Sugar().Errorf("failed to set user(%s)'s not validated posts in redis: %s", userID.String(), err.Error())
+		return nil, ErrInternal
+	}
+
+	return posts, nil
+}
+
+func (s *postService) FindNotValidatedPosts(ctx context.Context, limit, offset int) ([]*model.FullPost, error) {
+	maxLimit(&limit)
+
+	cachedPosts, err := redisrepo.GetMany[model.FullPost](s.repo.Redis.Default, ctx, redisrepo.NotValidatedPostsKey(limit, offset))
+	if err == nil {
+		return cachedPosts, nil
+	}
+	if err != redis.Nil {
+		s.logger.Sugar().Errorf("failed to get not validated posts from redis: %s", err.Error())
+		return nil, ErrInternal
+	}
+
+	posts, err := s.repo.Postgres.Post.FindNotValidatedPosts(ctx, limit, offset)
+	if err != nil && err != pgx.ErrNoRows {
+		s.logger.Sugar().Errorf("failed to find not validated posts from postgres: %s", err.Error())
+		return nil, ErrInternal
+	}
+
+	if err := s.repo.Redis.SetJSON(ctx, redisrepo.NotValidatedPostsKey(limit, offset), posts, time.Minute); err != nil {
+		s.logger.Sugar().Errorf("failed to set not validated posts in redis: %s", err.Error())
+		return nil, ErrInternal
 	}
 
 	return posts, nil

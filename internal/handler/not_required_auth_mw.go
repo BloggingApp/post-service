@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	jwtmanager "github.com/morf1lo/jwt-pair-manager"
 )
 
 func (h *Handler) notRequiredAuthMiddleware(c *gin.Context) {
@@ -19,13 +21,19 @@ func (h *Handler) notRequiredAuthMiddleware(c *gin.Context) {
 		return
 	}
 
-	user, err := h.getUserDataFromAccessTokenClaims(c.Request.Context(), accessToken)
+	claims, err := jwtmanager.DecodeJWT(accessToken, []byte(os.Getenv("ACCESS_SECRET")))
 	if err != nil {
 		c.Next()
 		return
 	}
 
-	c.Set("cached-user", *user)
+	user, err := h.getUserDataFromClaims(c.Request.Context(), claims)
+	if err != nil {
+		c.Next()
+		return
+	}
+
+	c.Set("user", *user)
 
 	c.Next()
 }

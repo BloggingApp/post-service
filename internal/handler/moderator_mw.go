@@ -10,7 +10,7 @@ import (
 	jwtmanager "github.com/morf1lo/jwt-pair-manager"
 )
 
-func (h *Handler) authMiddleware(c *gin.Context) {
+func (h *Handler) moderatorMiddleware(c *gin.Context) {
 	header := c.GetHeader("Authorization")
 	if !strings.HasPrefix(header, "Bearer ") {
 		c.JSON(http.StatusUnauthorized, dto.NewBasicResponse(false, errNotAuthorized.Error()))
@@ -32,6 +32,13 @@ func (h *Handler) authMiddleware(c *gin.Context) {
 		return
 	}
 
+	role := strings.ToLower(claims["role"].(string))
+	if role != "mod" || role != "admin" {
+		c.JSON(http.StatusForbidden, dto.NewBasicResponse(false, "no access"))
+		c.Abort()
+		return
+	}
+
 	user, err := h.getUserDataFromClaims(c.Request.Context(), claims)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
@@ -39,7 +46,7 @@ func (h *Handler) authMiddleware(c *gin.Context) {
 		return
 	}
 
-	c.Set("user", *user)
+	c.Set("cached-user", *user)
 
 	c.Next()
 }

@@ -27,7 +27,7 @@ func (h *Handler) postsUploadImage(c *gin.Context) {
 }
 
 func (h *Handler) postsCreate(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	var input dto.CreatePostRequest
 	if err := c.ShouldBind(&input); err != nil {
@@ -45,7 +45,7 @@ func (h *Handler) postsCreate(c *gin.Context) {
 }
 
 func (h *Handler) postsGetMy(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	var input dto.GetPostsRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -62,8 +62,26 @@ func (h *Handler) postsGetMy(c *gin.Context) {
 	c.JSON(http.StatusOK, posts)
 }
 
+func (h *Handler) postsGetMyNotValidated(c *gin.Context) {
+	user := h.getUserFromRequest(c)
+
+	var input dto.GetPostsRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	posts, err := h.services.Post.FindUserNotValidatedPosts(c.Request.Context(), user.ID, input.Limit, input.Offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, posts)
+}
+
 func (h *Handler) postsGetByID(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	postIDString := strings.TrimSpace(c.Param("postID"))
 	postID, err := strconv.Atoi(postIDString)
@@ -114,7 +132,7 @@ func (h *Handler) postsGet(c *gin.Context) {
 }
 
 func (h *Handler) postsIsLiked(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	postIDString := c.Param("postID")
 	postID, err := strconv.Atoi(postIDString)
@@ -129,7 +147,7 @@ func (h *Handler) postsIsLiked(c *gin.Context) {
 }
 
 func (h *Handler) postsLike(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	postIDString := c.Param("postID")
 	postID, err := strconv.Atoi(postIDString)
@@ -147,7 +165,7 @@ func (h *Handler) postsLike(c *gin.Context) {
 }
 
 func (h *Handler) postsUnlike(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	postIDString := c.Param("postID")
 	postID, err := strconv.Atoi(postIDString)
@@ -165,7 +183,7 @@ func (h *Handler) postsUnlike(c *gin.Context) {
 }
 
 func (h *Handler) postsGetLiked(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	var input dto.GetPostsRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -218,7 +236,7 @@ func (h *Handler) postsSearchByTitle(c *gin.Context) {
 }
 
 func (h *Handler) postsEdit(c *gin.Context) {
-	user := h.getCachedUserFromRequest(c)
+	user := h.getUserFromRequest(c)
 
 	var input dto.EditPostRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -233,4 +251,20 @@ func (h *Handler) postsEdit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.NewBasicResponse(true, ""))
+}
+
+func (h *Handler) modGetNotValidatedPosts(c *gin.Context) {
+	var input dto.GetPostsRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	posts, err := h.services.Post.FindNotValidatedPosts(c.Request.Context(), input.Limit, input.Offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, posts)
 }

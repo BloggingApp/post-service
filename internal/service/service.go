@@ -25,6 +25,8 @@ type Post interface {
 	Create(ctx context.Context, authorID uuid.UUID, req dto.CreatePostRequest) (*model.Post, error)
 	FindByID(ctx context.Context, id int64) (*model.FullPost, error)
 	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
+	FindUserNotValidatedPosts(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*model.AuthorPost, error)
+	FindNotValidatedPosts(ctx context.Context, limit, offset int) ([]*model.FullPost, error)
 	FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error)
 	IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool
 	Like(ctx context.Context, postID int64, userID uuid.UUID, unlike bool) error
@@ -52,6 +54,7 @@ type UserCache interface {
 	Update(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
 	FindByID(ctx context.Context, id uuid.UUID) (*model.CachedUser, error)
 	consumeUserUpdates(ctx context.Context)
+	consumeUsersCreate(ctx context.Context)
 }
 
 type Service struct {
@@ -69,6 +72,7 @@ func New(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQC
 }
 
 func (s *Service) StartConsumeAll(ctx context.Context) {
+	go s.UserCache.consumeUsersCreate(ctx)
 	go s.UserCache.consumeUserUpdates(ctx)
 }
 

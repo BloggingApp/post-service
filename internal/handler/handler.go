@@ -2,14 +2,13 @@ package handler
 
 import (
 	"context"
-	"os"
-
+	
 	"github.com/BloggingApp/post-service/internal/model"
 	"github.com/BloggingApp/post-service/internal/service"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	jwtmanager "github.com/morf1lo/jwt-pair-manager"
 	"github.com/spf13/viper"
 )
 
@@ -39,6 +38,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			posts.POST("/upload-image", h.authMiddleware, h.postsUploadImage)
 			posts.POST("", h.authMiddleware, h.postsCreate)
 			posts.GET("/my", h.authMiddleware, h.postsGetMy)
+			posts.GET("/my/notValidated", h.authMiddleware, h.postsGetMyNotValidated)
 			posts.GET("/author/:userID", h.postsGet)
 			posts.GET("/liked", h.authMiddleware, h.postsGetLiked)
 			posts.GET("/trending", h.authMiddleware, h.postsTrending)
@@ -52,6 +52,8 @@ func (h *Handler) InitRoutes() *gin.Engine {
 				post.DELETE("/unlike", h.authMiddleware, h.postsUnlike)
 				post.GET("/isLiked", h.authMiddleware, h.postsIsLiked)
 			}
+
+			posts.GET("/notValidated", h.moderatorMiddleware, h.modGetNotValidatedPosts)
 		}
 
 		comments := v1.Group("/comments")
@@ -77,19 +79,14 @@ func (h *Handler) InitRoutes() *gin.Engine {
 	return r
 }
 
-func (h *Handler) getUserDataFromAccessTokenClaims(ctx context.Context, accessToken string) (*model.CachedUser, error) {
-	claims, err := jwtmanager.DecodeJWT(accessToken, []byte(os.Getenv("ACCESS_SECRET")))
-	if err != nil {
-		return nil, err
-	}
-
+func (h *Handler) getUserDataFromClaims(ctx context.Context, claims jwt.MapClaims) (*model.CachedUser, error) {
 	idString := claims["id"].(string)
 	id, err := uuid.Parse(idString)
 	if err != nil {
 		return nil, err
 	}
 
-	user, err := h.services.UserCache.CreateOrGet(ctx, id, accessToken)
+	user, err := h.services.UserCache.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -97,8 +94,8 @@ func (h *Handler) getUserDataFromAccessTokenClaims(ctx context.Context, accessTo
 	return user, nil
 }
 
-func (h *Handler) getCachedUserFromRequest(c *gin.Context) *model.CachedUser {
-	userReq, _ := c.Get("cached-user")
+func (h *Handler) getUserFromRequest(c *gin.Context) *model.CachedUser {
+	userReq, _ := c.Get("user")
 
 	user, ok := userReq.(model.CachedUser)
 	if !ok {
