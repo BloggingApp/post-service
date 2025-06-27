@@ -25,6 +25,8 @@ type Post interface {
 	Create(ctx context.Context, authorID uuid.UUID, req dto.CreatePostRequest) (*model.Post, error)
 	FindByID(ctx context.Context, id int64) (*model.FullPost, error)
 	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
+	FindUserNotValidatedPosts(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*model.AuthorPost, error)
+	FindNotValidatedPosts(ctx context.Context, limit, offset int) ([]*model.FullPost, error)
 	FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error)
 	IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool
 	Like(ctx context.Context, postID int64, userID uuid.UUID, unlike bool) error

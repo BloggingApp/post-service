@@ -9,6 +9,8 @@ import (
 const (
 	POST_KEY = "post:%d" // <postID>
 	AUTHOR_POSTS_KEY = "author:%s-posts:%d:%d" // <authorID>:<limit>:<offset>
+	USER_NOT_VALIDATED_POSTS_KEY = "user:%s-not-validated-posts:%d:%d" // <userID>:<limit>:<offset>
+	NOT_VALIDATED_POSTS_KEY = "not-validated-posts:%d:%d" // <limit>:<offset>
 	USER_CACHE_KEY = "user-cache:%s" // <userID>
 	POST_COMMENTS_KEY = "post:%d-comments:%d:%d" // <postID>:<limit>:<offset>
 	COMMENT_REPLIES_KEY = "post:%d-comment:%d-replies:%d:%d" // <postID>:<commentID>:<limit>:<offset>
@@ -27,23 +29,31 @@ func PostKey(postID int64) string {
 	return fmt.Sprintf(POST_KEY, postID)
 }
 
-func AuthorPostsKey(authorID string, limit int, offset int) string {
+func AuthorPostsKey(authorID string, limit, offset int) string {
 	return fmt.Sprintf(AUTHOR_POSTS_KEY, authorID, limit, offset)
+}
+
+func UserNotValidatedPostsKey(userID string, limit, offset int) string {
+	return fmt.Sprintf(USER_NOT_VALIDATED_POSTS_KEY, userID, limit, offset)
+}
+
+func NotValidatedPostsKey(limit, offset int) string {
+	return fmt.Sprintf(NOT_VALIDATED_POSTS_KEY, limit, offset)
 }
 
 func UserCacheKey(userID string) string {
 	return fmt.Sprintf(USER_CACHE_KEY, userID)
 }
 
-func PostCommentsKey(postID int64, limit int, offset int) string {
+func PostCommentsKey(postID int64, limit, offset int) string {
 	return fmt.Sprintf(POST_COMMENTS_KEY, postID, limit, offset)
 }
 
-func CommentRepliesKey(postID int64, commentID int64, limit int, offset int) string {
+func CommentRepliesKey(postID int64, commentID int64, limit, offset int) string {
 	return fmt.Sprintf(COMMENT_REPLIES_KEY, postID, commentID, limit, offset)
 }
 
-func UserLikesKey(userID string, limit int, offset int) string {
+func UserLikesKey(userID string, limit, offset int) string {
 	return fmt.Sprintf(USER_LIKES_KEY, userID, limit, offset)
 }
 

@@ -38,6 +38,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			posts.POST("/upload-image", h.authMiddleware, h.postsUploadImage)
 			posts.POST("", h.authMiddleware, h.postsCreate)
 			posts.GET("/my", h.authMiddleware, h.postsGetMy)
+			posts.GET("/my/notValidated", h.authMiddleware, h.postsGetMyNotValidated)
 			posts.GET("/author/:userID", h.postsGet)
 			posts.GET("/liked", h.authMiddleware, h.postsGetLiked)
 			posts.GET("/trending", h.authMiddleware, h.postsTrending)
@@ -51,6 +52,8 @@ func (h *Handler) InitRoutes() *gin.Engine {
 				post.DELETE("/unlike", h.authMiddleware, h.postsUnlike)
 				post.GET("/isLiked", h.authMiddleware, h.postsIsLiked)
 			}
+
+			posts.GET("/notValidated", h.moderatorMiddleware, h.modGetNotValidatedPosts)
 		}
 
 		comments := v1.Group("/comments")

@@ -21,6 +21,8 @@ type Post interface {
 	Create(ctx context.Context, post model.Post, tags []string) (*model.Post, error)
 	FindByID(ctx context.Context, id int64) (*model.FullPost, error)
 	FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error)
+	FindUserNotValidatedPosts(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*model.AuthorPost, error)
+	FindNotValidatedPosts(ctx context.Context, limit, offset int) ([]*model.FullPost, error)
 	SearchByTags(ctx context.Context, tags []string, limit int, offset int) ([]*model.FullPost, error)
 	IncrViews(ctx context.Context, id int64) error
 	Like(ctx context.Context, postID int64, userID uuid.UUID) bool

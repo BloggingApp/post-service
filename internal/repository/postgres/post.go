@@ -67,12 +67,11 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 	rows, err := r.db.Query(
 		ctx,
 		`SELECT
-		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, t.tag
 		FROM posts p
 		JOIN cached_users u ON p.author_id = u.id
-		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
-		WHERE p.id = $1`,
+		WHERE p.validated AND p.id = $1`,
 		id,
 	)
 	if err != nil {
@@ -95,8 +94,6 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 			username string
 			displayName *string
 			avatarURL *string
-			imageURL *string
-			imagePosition *int
 			tag *string
 		)
 		if err := rows.Scan(
@@ -112,15 +109,13 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 			&username,
 			&displayName,
 			&avatarURL,
-			&imageURL,
-			&imagePosition,
 			&tag,
 		); err != nil {
 			return nil, err
 		}
 
-		post, exists := postMap[id]
-		if !exists {
+		post, ok := postMap[id]
+		if !ok {
 			post = &model.FullPost{
 				Post: model.Post{
 					ID: id,
@@ -132,6 +127,7 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 					Likes: likes,
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
+					Validated: true,
 				},
 				Author: model.UserAuthor{
 					Username: username,
@@ -165,20 +161,21 @@ func (r *postRepo) FindByID(ctx context.Context, id int64) (*model.FullPost, err
 	return posts[0], nil
 }
 
-func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error) {
+func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit, offset int) ([]*model.AuthorPost, error) {
 	maxLimit(&limit)
 
 	rows, err := r.db.Query(
 		ctx,
-		`SELECT
-		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, i.url, i.position, t.tag
+		`
+		SELECT
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, t.tag
 		FROM posts p
-		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
-		WHERE p.author_id = $1
+		WHERE p.validated AND p.author_id = $1
 		ORDER BY p.created_at DESC
 		LIMIT $2
-		OFFSET $3`,
+		OFFSET $3
+		`,
 		authorID,
 		limit,
 		offset,
@@ -200,8 +197,6 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 			likes int64
 			createdAt time.Time
 			updatedAt time.Time
-			imageURL *string
-			imagePosition *int
 			tag *string
 		)
 		if err := rows.Scan(
@@ -214,15 +209,13 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 			&likes,
 			&createdAt,
 			&updatedAt,
-			&imageURL,
-			&imagePosition,
 			&tag,
 		); err != nil {
 			return nil, err
 		}
 
-		post, exists := postsMap[id]
-		if !exists {
+		post, ok := postsMap[id]
+		if !ok {
 			post = &model.AuthorPost{
 				Post: model.Post{
 					ID: id,
@@ -234,6 +227,7 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 					Likes: likes,
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
+					Validated: true,
 				},
 				Tags: []string{},
 			}
@@ -257,6 +251,204 @@ func (r *postRepo) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limi
 	return posts, nil
 }
 
+func (r *postRepo) FindUserNotValidatedPosts(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*model.AuthorPost, error) {
+	maxLimit(&limit)
+
+	rows, err := r.db.Query(
+		ctx,
+		`
+		SELECT
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, p.not_validated_msg, t.tag
+		FROM posts p
+		LEFT JOIN post_tags t ON p.id = t.post_id
+		WHERE !p.validated AND p.author_id = $1
+		ORDER BY p.created_at DESC
+		LIMIT $2
+		OFFSET $3
+		`,
+		userID,
+		limit,
+		offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+		postsMap := make(map[int64]*model.AuthorPost)
+	for rows.Next() {
+		var (
+			id int64
+			authorID uuid.UUID
+			title string
+			content string
+			feedView string
+			views int64
+			likes int64
+			createdAt time.Time
+			updatedAt time.Time
+			notValidatedMsg *string
+			tag *string
+		)
+		if err := rows.Scan(
+			&id,
+			&authorID,
+			&title,
+			&content,
+			&feedView,
+			&views,
+			&likes,
+			&createdAt,
+			&updatedAt,
+			&notValidatedMsg,
+			&tag,
+		); err != nil {
+			return nil, err
+		}
+
+		post, ok := postsMap[id]
+		if !ok {
+			post = &model.AuthorPost{
+				Post: model.Post{
+					ID: id,
+					AuthorID: authorID,
+					Title: title,
+					Content: content,
+					FeedView: feedView,
+					Views: views,
+					Likes: likes,
+					CreatedAt: createdAt,
+					UpdatedAt: updatedAt,
+					Validated: false,
+					NotValidatedMsg: notValidatedMsg,
+				},
+				Tags: []string{},
+			}
+			postsMap[post.Post.ID] = post
+		}
+
+		if tag != nil {
+			postsMap[post.Post.ID].Tags = append(postsMap[post.Post.ID].Tags, *tag)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var posts []*model.AuthorPost
+	for _, post := range postsMap {
+		posts = append(posts, post)
+	}
+
+	return posts, nil
+}
+
+func (r *postRepo) FindNotValidatedPosts(ctx context.Context, limit, offset int) ([]*model.FullPost, error) {
+	maxLimit(&limit)
+
+	rows, err := r.db.Query(
+		ctx,
+		`SELECT
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, p.not_validated_msg, u.username, u.display_name, u.avatar_url, t.tag
+		FROM posts p
+		JOIN cached_users u ON p.author_id = u.id
+		LEFT JOIN post_tags t ON p.id = t.post_id
+		WHERE !p.validated
+		LIMIT $2
+		OFFSET $3`,
+		limit,
+		offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	postsMap := make(map[int64]*model.FullPost)
+	for rows.Next() {
+		var (
+			id int64
+			authorID uuid.UUID
+			title string
+			content string
+			feedView string
+			views int64
+			likes int64
+			createdAt time.Time
+			updatedAt time.Time
+			notValidatedMsg *string
+			username string
+			displayName *string
+			avatarURL *string
+			tag *string
+		)
+		if err := rows.Scan(
+			&id,
+			&authorID,
+			&title,
+			&content,
+			&feedView,
+			&views,
+			&likes,
+			&createdAt,
+			&updatedAt,
+			&notValidatedMsg,
+			&username,
+			&displayName,
+			&avatarURL,
+			&tag,
+		); err != nil {
+			return nil, err
+		}
+
+		post, ok := postsMap[id]
+		if !ok {
+			post = &model.FullPost{
+				Post: model.Post{
+					ID: id,
+					AuthorID: authorID,
+					Title: title,
+					Content: content,
+					FeedView: feedView,
+					Views: views,
+					Likes: likes,
+					CreatedAt: createdAt,
+					UpdatedAt: updatedAt,
+					Validated: false,
+					NotValidatedMsg: notValidatedMsg,
+				},
+				Author: model.UserAuthor{
+					Username: username,
+					DisplayName: displayName,
+					AvatarURL: avatarURL,
+				},
+				Tags: []string{},
+			}
+			postsMap[id] = post
+		}
+
+		if tag != nil {
+			postsMap[post.Post.ID].Tags = append(postsMap[post.Post.ID].Tags, *tag)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var posts []*model.FullPost
+	for _, post := range postsMap {
+		posts = append(posts, post)
+	}
+
+	if len(posts) == 0 {
+		return []*model.FullPost{}, nil
+	}
+
+	return posts, nil
+}
+
 func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, offset int) ([]*model.FullPost, error) {
 	if len(tags) == 0 {
 		return nil, nil
@@ -267,12 +459,11 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 	rows, err := r.db.Query(
 		ctx,
 		`SELECT
-		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, t.tag
 		FROM posts p
 		JOIN cached_users u ON p.author_id = u.id
-		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
-		WHERE t.tag = ANY($1)
+		WHERE p.validated AND t.tag = ANY($1)
 		ORDER BY p.likes DESC, p.views DESC, p.created_at DESC
 		LIMIT $2
 		OFFSET $3`,
@@ -300,8 +491,6 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 			username string
 			displayName *string
 			avatarURL *string
-			imageURL *string
-			imagePosition *int
 			tag *string
 		)
 		if err := rows.Scan(
@@ -317,15 +506,13 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 			&username,
 			&displayName,
 			&avatarURL,
-			&imageURL,
-			&imagePosition,
 			&tag,
 		); err != nil {
 			return nil, err
 		}
 
-		post, exists := postsMap[id]
-		if !exists {
+		post, ok := postsMap[id]
+		if !ok {
 			post = &model.FullPost{
 				Post: model.Post{
 					ID: id,
@@ -337,6 +524,7 @@ func (r *postRepo) SearchByTags(ctx context.Context, tags []string, limit int, o
 					Likes: likes,
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
+					Validated: true,
 				},
 				Author: model.UserAuthor{
 					Username: username,
@@ -426,11 +614,10 @@ func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit in
 	rows, err := r.db.Query(
 		ctx,
 		`SELECT
-		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, i.url, i.position, t.tag
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at, u.username, u.display_name, u.avatar_url, t.tag
 		FROM post_likes l
-		JOIN posts p ON l.post_id = p.id
+		JOIN posts p ON p.validated AND l.post_id = p.id
 		JOIN cached_users u ON p.author_id = u.id
-		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
 		WHERE l.user_id = $1
 		ORDER BY l.created_at DESC
@@ -460,8 +647,6 @@ func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit in
 			username string
 			displayName *string
 			avatarURL *string
-			imageURL *string
-			imagePosition *int
 			tag *string
 		)
 		if err := rows.Scan(
@@ -477,15 +662,13 @@ func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit in
 			&username,
 			&displayName,
 			&avatarURL,
-			&imageURL,
-			&imagePosition,
 			&tag,
 		); err != nil {
 			return nil, err
 		}
 
-		post, exists := postsMap[id]
-		if !exists {
+		post, ok := postsMap[id]
+		if !ok {
 			post = &model.FullPost{
 				Post: model.Post{
 					ID: id,
@@ -497,6 +680,7 @@ func (r *postRepo) FindUserLikes(ctx context.Context, userID uuid.UUID, limit in
 					Likes: likes,
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
+					Validated: true,
 				},
 				Author: model.UserAuthor{
 					Username: username,
@@ -540,13 +724,11 @@ func (r *postRepo) GetTrending(ctx context.Context, hours, limit int) ([]*model.
 		SELECT
 		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at,
 		u.username, u.display_name, u.avatar_url,
-		i.url, i.position,
 		t.tag
 		FROM posts p
 		JOIN cached_users u ON p.author_id = u.id
-		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
-		WHERE p.created_at >= $1
+		WHERE p.validated AND p.created_at >= $1
 		ORDER BY p.likes DESC, p.views DESC
 		LIMIT $2
 		`,
@@ -572,8 +754,6 @@ func (r *postRepo) GetTrending(ctx context.Context, hours, limit int) ([]*model.
 			username string
 			displayName *string
 			avatarURL *string
-			imageURL *string
-			imagePosition *int
 			tag *string
 		)
 		if err := rows.Scan(
@@ -589,15 +769,13 @@ func (r *postRepo) GetTrending(ctx context.Context, hours, limit int) ([]*model.
 			&username,
 			&displayName,
 			&avatarURL,
-			&imageURL,
-			&imagePosition,
 			&tag,
 		); err != nil {
 			return nil, err
 		}
 
-		post, exists := postsMap[id]
-		if !exists {
+		post, ok := postsMap[id]
+		if !ok {
 			post = &model.FullPost{
 				Post: model.Post{
 					ID: id,
@@ -609,6 +787,7 @@ func (r *postRepo) GetTrending(ctx context.Context, hours, limit int) ([]*model.
 					Likes: likes,
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
+					Validated: true,
 				},
 				Author: model.UserAuthor{
 					Username: username,
@@ -650,15 +829,13 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 		ctx,
 		`
 		SELECT
-		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at,
+		p.id, p.author_id, p.title, p.content, p.feed_view, p.views, p.likes, p.created_at, p.updated_at
 		u.username, u.display_name, u.avatar_url,
-		i.url, i.position,
 		t.tag
 		FROM posts p
 		JOIN cached_users u ON p.author_id = u.id
-		LEFT JOIN post_images i ON p.id = i.post_id
 		LEFT JOIN post_tags t ON p.id = t.post_id
-		WHERE p.title LIKE $1
+		WHERE p.validated AND p.title LIKE $1
 		ORDER BY p.created_at DESC, p.updated_at DESC
 		LIMIT $2
 		OFFSET $3
@@ -684,8 +861,6 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 			username string
 			displayName *string
 			avatarURL *string
-			imageURL *string
-			imagePosition *int
 			tag *string
 		)
 		if err := rows.Scan(
@@ -701,15 +876,13 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 			&username,
 			&displayName,
 			&avatarURL,
-			&imageURL,
-			&imagePosition,
 			&tag,
 		); err != nil {
 			return nil, err
 		}
 
-		post, exists := postsMap[id]
-		if !exists {
+		post, ok := postsMap[id]
+		if !ok {
 			post = &model.FullPost{
 				Post: model.Post{
 					ID: id,
@@ -721,6 +894,7 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 					Likes: likes,
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
+					Validated: true,
 				},
 				Author: model.UserAuthor{
 					Username: username,

@@ -62,6 +62,24 @@ func (h *Handler) postsGetMy(c *gin.Context) {
 	c.JSON(http.StatusOK, posts)
 }
 
+func (h *Handler) postsGetMyNotValidated(c *gin.Context) {
+	user := h.getUserFromRequest(c)
+
+	var input dto.GetPostsRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	posts, err := h.services.Post.FindUserNotValidatedPosts(c.Request.Context(), user.ID, input.Limit, input.Offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, posts)
+}
+
 func (h *Handler) postsGetByID(c *gin.Context) {
 	user := h.getUserFromRequest(c)
 
@@ -233,4 +251,20 @@ func (h *Handler) postsEdit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.NewBasicResponse(true, ""))
+}
+
+func (h *Handler) modGetNotValidatedPosts(c *gin.Context) {
+	var input dto.GetPostsRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	posts, err := h.services.Post.FindNotValidatedPosts(c.Request.Context(), input.Limit, input.Offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, posts)
 }
