@@ -14,17 +14,21 @@
 - **`[PUB]`** - ***doesn't** require auth*
 
 `/posts`:
+- **`[AUTH]` POST** -> `/uploadImage` - *upload image for post*
 - **`[AUTH]` POST** -> `/` - *create a post*
-- **`[AUTH]` GET** -> `/my` - *get my posts*
+- **`[AUTH]` GET** -> `/my` - *get posts*
+- **`[AUTH]` GET** -> `/my/notValidated` - *get not validated posts yet*
 - **`[PUB]` GET** -> `/author/:<userID>` - *get `:userID`'s posts*
 - **`[AUTH]` GET** -> `/liked` - *get user liked posts*
 - **`[AUTH]` GET** -> `/trending [hours, limit]` - *get trending posts*
 - **`[AUTH]` GET** -> `/search [q, limit, offset]`
+- **`[AUTH]` PATCH** -> `/edit` - *edit post*
+
 
 - **`[PUB]` GET** -> `/:<postID>` - *get post by `:postID`*
-- **`[AUTH]` GET** -> `/:<postID>/isLiked` - *get if user has liked the post*
 - **`[AUTH]` POST** -> `/:<postID>/like` - *like post*
 - **`[AUTH]` DELETE** -> `/:<postID>/unlike` - *unlike post*
+- **`[AUTH]` GET** -> `/:<postID>/isLiked` - *get if user has liked the post*
 
 `/comments`:
 - **`[AUTH]` POST** -> `/` - *create a comment to post*
