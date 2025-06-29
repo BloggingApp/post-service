@@ -54,6 +54,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 			}
 
 			posts.GET("/notValidated", h.moderatorMiddleware, h.modGetNotValidatedPosts)
+			posts.PATCH("/validationStatus", h.moderatorMiddleware, h.modUpdatePostValidationStatus)
 		}
 
 		comments := v1.Group("/comments")
