@@ -35,7 +35,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 	{
 		posts := v1.Group("/posts")
 		{
-			posts.POST("/upload-image", h.authMiddleware, h.postsUploadImage)
+			posts.POST("/uploadImage", h.authMiddleware, h.postsUploadImage)
 			posts.POST("", h.authMiddleware, h.postsCreate)
 			posts.GET("/my", h.authMiddleware, h.postsGetMy)
 			posts.GET("/my/notValidated", h.authMiddleware, h.postsGetMyNotValidated)
