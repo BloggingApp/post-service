@@ -33,6 +33,7 @@ type Post interface {
 	GetTrending(ctx context.Context, hours, limit int) ([]*model.FullPost, error)
 	SearchByTitle(ctx context.Context, title string, limit, offset int) ([]*model.FullPost, error)
 	Edit(ctx context.Context, dto dto.EditPostRequest) error
+	UpdateValidationStatus(ctx context.Context, id int64, moderatorID uuid.UUID, validated bool, validationStatusMsg string) error
 	SchedulePostLikesUpdates()
 	StartScheduledJobs()
 }

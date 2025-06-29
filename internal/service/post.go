@@ -628,3 +628,31 @@ func (s *postService) StartScheduledJobs() {
 
 	s.scheduler.Start()
 }
+
+func (s *postService) UpdateValidationStatus(ctx context.Context, id int64, moderatorID uuid.UUID, validated bool, validationStatusMsg string) error {
+	post, err := s.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if err := s.repo.Postgres.Post.UpdateValidationStatus(ctx, id, moderatorID, validated, validationStatusMsg); err != nil {
+		s.logger.Sugar().Errorf("failed to update post(%d) validation status: %s", id, err.Error())
+		return ErrInternal
+	}
+
+	msgJSON, err := json.Marshal(dto.MQPostValidationStatusUpdateMsg{
+		PostID: id,
+		UserID: post.Post.AuthorID,
+		StatusMsg: validationStatusMsg,
+	})
+	if err != nil {
+		s.logger.Sugar().Errorf("failed to marshal rabbitmq msg for queue(%s) to json: %s", rabbitmq.POST_VALIDATION_STATUS_UPDATES_QUEUE, err.Error())
+		return ErrInternal
+	}
+	if err := s.rabbitmq.PublishToQueue(rabbitmq.POST_VALIDATION_STATUS_UPDATES_QUEUE, msgJSON); err != nil {
+		s.logger.Sugar().Errorf("failed to publish rabbitmq msg to queue(%s): %s", rabbitmq.POST_VALIDATION_STATUS_UPDATES_QUEUE, err.Error())
+		return ErrInternal
+	}
+
+	return nil
+}

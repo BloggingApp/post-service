@@ -287,7 +287,7 @@ func (r *postRepo) FindUserNotValidatedPosts(ctx context.Context, userID uuid.UU
 			likes int64
 			createdAt time.Time
 			updatedAt time.Time
-			notValidatedMsg *string
+			validationStatusMsg *string
 			tag *string
 		)
 		if err := rows.Scan(
@@ -300,7 +300,7 @@ func (r *postRepo) FindUserNotValidatedPosts(ctx context.Context, userID uuid.UU
 			&likes,
 			&createdAt,
 			&updatedAt,
-			&notValidatedMsg,
+			&validationStatusMsg,
 			&tag,
 		); err != nil {
 			return nil, err
@@ -320,7 +320,7 @@ func (r *postRepo) FindUserNotValidatedPosts(ctx context.Context, userID uuid.UU
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
 					Validated: false,
-					NotValidatedMsg: notValidatedMsg,
+					ValidationStatusMsg: validationStatusMsg,
 				},
 				Tags: []string{},
 			}
@@ -377,7 +377,7 @@ func (r *postRepo) FindNotValidatedPosts(ctx context.Context, limit, offset int)
 			likes int64
 			createdAt time.Time
 			updatedAt time.Time
-			notValidatedMsg *string
+			validationStatusMsg *string
 			username string
 			displayName *string
 			avatarURL *string
@@ -393,7 +393,7 @@ func (r *postRepo) FindNotValidatedPosts(ctx context.Context, limit, offset int)
 			&likes,
 			&createdAt,
 			&updatedAt,
-			&notValidatedMsg,
+			&validationStatusMsg,
 			&username,
 			&displayName,
 			&avatarURL,
@@ -416,7 +416,7 @@ func (r *postRepo) FindNotValidatedPosts(ctx context.Context, limit, offset int)
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
 					Validated: false,
-					NotValidatedMsg: notValidatedMsg,
+					ValidationStatusMsg: validationStatusMsg,
 				},
 				Author: model.UserAuthor{
 					Username: username,
@@ -958,4 +958,28 @@ func (r *postRepo) Update(ctx context.Context, id int64, authorID uuid.UUID, fie
 
 	_, err := r.db.Exec(ctx, query, args...)
 	return err
+}
+
+func (r *postRepo) UpdateValidationStatus(ctx context.Context, id int64, moderatorID uuid.UUID, validated bool, validationStatusMsg string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, "UPDATE posts SET validated = $1, validation_status_msg = $2 WHERE id = $3", validated, validationStatusMsg, id)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, "INSERT INTO post_validation_status_contribs(post_id, moderator_id, validated, validation_status_msg) VALUES($1, $2, $3, $4)", id, moderatorID, validated, validationStatusMsg)
+	if err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	return nil
 }

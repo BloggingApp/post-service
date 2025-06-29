@@ -268,3 +268,20 @@ func (h *Handler) modGetNotValidatedPosts(c *gin.Context) {
 
 	c.JSON(http.StatusOK, posts)
 }
+
+func (h *Handler) modUpdatePostValidationStatus(c *gin.Context) {
+	moderator := h.getUserFromRequest(c)
+
+	var input dto.UpdatePostValidationStatusRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	if err := h.services.Post.UpdateValidationStatus(c.Request.Context(), input.PostID, moderator.ID, input.Validated, input.StatusMsg); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewBasicResponse(false, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewBasicResponse(true, ""))
+}

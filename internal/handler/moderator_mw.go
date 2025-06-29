@@ -33,7 +33,7 @@ func (h *Handler) moderatorMiddleware(c *gin.Context) {
 	}
 
 	role := strings.ToLower(claims["role"].(string))
-	if role != "mod" || role != "admin" {
+	if role != "mod" && role != "admin" {
 		c.JSON(http.StatusForbidden, dto.NewBasicResponse(false, "no access"))
 		c.Abort()
 		return

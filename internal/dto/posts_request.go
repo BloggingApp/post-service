@@ -21,3 +21,9 @@ type EditPostRequest struct {
 	Content  *string   `json:"content"`
 	FeedView *string   `json:"feed_view"`
 }
+
+type UpdatePostValidationStatusRequest struct {
+	PostID    int64  `json:"post_id" binding:"required"`
+	Validated bool   `json:"validated" binding:"required"`
+	StatusMsg string `json:"status_msg" binding:"required,max=120"`
+}
