@@ -9,6 +9,7 @@ import (
 	"github.com/BloggingApp/post-service/internal/rabbitmq"
 	"github.com/BloggingApp/post-service/internal/repository"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -64,11 +65,11 @@ type Service struct {
 	UserCache
 }
 
-func New(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn) *Service {
+func New(logger *zap.Logger, repo *repository.Repository, rdb *redis.Client, rabbitmq *rabbitmq.MQConn) *Service {
 	return &Service{
-		Post: newPostService(logger, repo, rabbitmq),
-		Comment: newCommentService(logger, repo),
-		UserCache: newUserCacheService(logger, repo, rabbitmq),
+		Post: newPostService(logger, repo, rdb, rabbitmq),
+		Comment: newCommentService(logger, repo, rdb),
+		UserCache: newUserCacheService(logger, repo, rdb, rabbitmq),
 	}
 }
 
