@@ -22,14 +22,16 @@ import (
 type userCacheService struct {
 	logger *zap.Logger
 	repo *repository.Repository
+	rdb *redis.Client
 	rabbitmq *rabbitmq.MQConn
 	httpClient *http.Client
 }
 
-func newUserCacheService(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn) UserCache {
+func newUserCacheService(logger *zap.Logger, repo *repository.Repository, rdb *redis.Client, rabbitmq *rabbitmq.MQConn) UserCache {
 	return &userCacheService{
 		logger: logger,
 		repo: repo,
+		rdb: rdb,
 		rabbitmq: rabbitmq,
 		httpClient: &http.Client{},
 	}
@@ -116,7 +118,7 @@ func (s *userCacheService) Update(ctx context.Context, id uuid.UUID, updates map
 		return ErrInternal
 	}
 
-	if err := s.repo.Redis.Default.Del(ctx, redisrepo.UserCacheKey(id.String())).Err(); err != nil {
+	if err := s.rdb.Del(ctx, redisrepo.UserCacheKey(id.String())).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to delete cached user(%s) from redis: %s", id.String(), err.Error())
 	}
 
@@ -124,7 +126,7 @@ func (s *userCacheService) Update(ctx context.Context, id uuid.UUID, updates map
 }
 
 func (s *userCacheService) FindByID(ctx context.Context, id uuid.UUID) (*model.CachedUser, error) {
-	cachedUser, err := redisrepo.Get[model.CachedUser](s.repo.Redis.Default, ctx, redisrepo.UserCacheKey(id.String()))
+	cachedUser, err := redisrepo.Get[model.CachedUser](s.rdb, ctx, redisrepo.UserCacheKey(id.String()))
 	if err == nil {
 		return cachedUser, nil
 	}
@@ -143,7 +145,7 @@ func (s *userCacheService) FindByID(ctx context.Context, id uuid.UUID) (*model.C
 		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.UserCacheKey(id.String()), user, time.Hour); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, redisrepo.UserCacheKey(id.String()), user, time.Hour); err != nil {
 		s.logger.Sugar().Errorf("failed to set user(%s) in redis: %s", id.String(), err.Error())
 		return nil, ErrInternal
 	}

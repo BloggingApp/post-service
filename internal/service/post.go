@@ -31,12 +31,13 @@ import (
 type postService struct {
 	logger *zap.Logger
 	repo *repository.Repository
+	rdb *redis.Client
 	httpClient *http.Client
 	scheduler gocron.Scheduler
 	rabbitmq *rabbitmq.MQConn
 }
 
-func newPostService(logger *zap.Logger, repo *repository.Repository, rabbitmq *rabbitmq.MQConn) Post {
+func newPostService(logger *zap.Logger, repo *repository.Repository, rdb *redis.Client, rabbitmq *rabbitmq.MQConn) Post {
 	scheduler, err := gocron.NewScheduler()
 	if err != nil {
 		panic(err)
@@ -45,6 +46,7 @@ func newPostService(logger *zap.Logger, repo *repository.Repository, rabbitmq *r
 	return &postService{
 		logger: logger,
 		repo: repo,
+		rdb: rdb,
 		httpClient: &http.Client{},
 		scheduler: scheduler,
 		rabbitmq: rabbitmq,
@@ -225,7 +227,7 @@ func (s *postService) uploadImageToFileStorage(path string, file multipart.File,
 }
 
 func (s *postService) FindByID(ctx context.Context, id int64) (*model.FullPost, error) {
-	cachedPost, err := redisrepo.Get[model.FullPost](s.repo.Redis.Default, ctx, redisrepo.PostKey(id))
+	cachedPost, err := redisrepo.Get[model.FullPost](s.rdb, ctx, redisrepo.PostKey(id))
 	if err == nil {
 		if cachedPost != nil {
 			s.incrViewsIfPostIsNotNil(cachedPost.Post.ID)
@@ -243,7 +245,7 @@ func (s *postService) FindByID(ctx context.Context, id int64) (*model.FullPost, 
 		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.PostKey(id), post, time.Minute * 30); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, redisrepo.PostKey(id), post, time.Minute * 30); err != nil {
 		s.logger.Sugar().Errorf("failed to set post(%d) in redis: %s", id, err.Error())
 		return nil, ErrInternal
 	}
@@ -267,7 +269,7 @@ func (s *postService) incrViewsIfPostIsNotNil(postID int64) {
 func (s *postService) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, limit int, offset int) ([]*model.AuthorPost, error) {
 	maxLimit(&limit)
 
-	cachedPosts, err := redisrepo.GetMany[model.AuthorPost](s.repo.Redis.Default, ctx, redisrepo.AuthorPostsKey(authorID.String(), limit, offset))
+	cachedPosts, err := redisrepo.GetMany[model.AuthorPost](s.rdb, ctx, redisrepo.AuthorPostsKey(authorID.String(), limit, offset))
 	if err == nil {
 		return cachedPosts, nil
 	}
@@ -282,7 +284,7 @@ func (s *postService) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, l
 		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.AuthorPostsKey(authorID.String(), limit, offset), posts, time.Minute); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, redisrepo.AuthorPostsKey(authorID.String(), limit, offset), posts, time.Minute); err != nil {
 		s.logger.Sugar().Errorf("failed to set author(%s)'s posts in redis: %s", authorID.String(), err.Error())
 		return nil, ErrInternal
 	}
@@ -293,7 +295,7 @@ func (s *postService) FindAuthorPosts(ctx context.Context, authorID uuid.UUID, l
 func (s *postService) FindUserNotValidatedPosts(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*model.AuthorPost, error) {
 	maxLimit(&limit)
 
-	cachedPosts, err := redisrepo.GetMany[model.AuthorPost](s.repo.Redis.Default, ctx, redisrepo.UserNotValidatedPostsKey(userID.String(), limit, offset))
+	cachedPosts, err := redisrepo.GetMany[model.AuthorPost](s.rdb, ctx, redisrepo.UserNotValidatedPostsKey(userID.String(), limit, offset))
 	if err == nil {
 		return cachedPosts, nil
 	}
@@ -308,7 +310,7 @@ func (s *postService) FindUserNotValidatedPosts(ctx context.Context, userID uuid
 		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.SetJSON(ctx, redisrepo.UserNotValidatedPostsKey(userID.String(), limit, offset), posts, time.Minute); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, redisrepo.UserNotValidatedPostsKey(userID.String(), limit, offset), posts, time.Minute); err != nil {
 		s.logger.Sugar().Errorf("failed to set user(%s)'s not validated posts in redis: %s", userID.String(), err.Error())
 		return nil, ErrInternal
 	}
@@ -319,7 +321,7 @@ func (s *postService) FindUserNotValidatedPosts(ctx context.Context, userID uuid
 func (s *postService) FindNotValidatedPosts(ctx context.Context, limit, offset int) ([]*model.FullPost, error) {
 	maxLimit(&limit)
 
-	cachedPosts, err := redisrepo.GetMany[model.FullPost](s.repo.Redis.Default, ctx, redisrepo.NotValidatedPostsKey(limit, offset))
+	cachedPosts, err := redisrepo.GetMany[model.FullPost](s.rdb, ctx, redisrepo.NotValidatedPostsKey(limit, offset))
 	if err == nil {
 		return cachedPosts, nil
 	}
@@ -334,7 +336,7 @@ func (s *postService) FindNotValidatedPosts(ctx context.Context, limit, offset i
 		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.SetJSON(ctx, redisrepo.NotValidatedPostsKey(limit, offset), posts, time.Minute); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, redisrepo.NotValidatedPostsKey(limit, offset), posts, time.Minute); err != nil {
 		s.logger.Sugar().Errorf("failed to set not validated posts in redis: %s", err.Error())
 		return nil, ErrInternal
 	}
@@ -345,7 +347,7 @@ func (s *postService) FindNotValidatedPosts(ctx context.Context, limit, offset i
 func (s *postService) FindUserLikes(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*model.FullPost, error) {
 	maxLimit(&limit)
 
-	postsCache, err := redisrepo.GetMany[model.FullPost](s.repo.Redis.Default, ctx, redisrepo.UserLikesKey(userID.String(), limit, offset))
+	postsCache, err := redisrepo.GetMany[model.FullPost](s.rdb, ctx, redisrepo.UserLikesKey(userID.String(), limit, offset))
 	if err == nil {
 		return postsCache, nil
 	}
@@ -360,7 +362,7 @@ func (s *postService) FindUserLikes(ctx context.Context, userID uuid.UUID, limit
 		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.UserLikesKey(userID.String(), limit, offset), posts, time.Hour); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, redisrepo.UserLikesKey(userID.String(), limit, offset), posts, time.Hour); err != nil {
 		s.logger.Sugar().Errorf("failed to set user(%s) likes in redis: %s", userID.String(), err.Error())
 		return nil, ErrInternal
 	}
@@ -369,7 +371,7 @@ func (s *postService) FindUserLikes(ctx context.Context, userID uuid.UUID, limit
 }
 
 func (s *postService) IsLiked(ctx context.Context, postID int64, userID uuid.UUID) bool {
-	isLikedCache, err := s.repo.Redis.Default.Get(ctx, redisrepo.IsLikedPostKey(userID.String(), postID)).Bool()
+	isLikedCache, err := s.rdb.Get(ctx, redisrepo.IsLikedPostKey(userID.String(), postID)).Bool()
 	if err == nil {
 		return isLikedCache
 	}
@@ -380,7 +382,7 @@ func (s *postService) IsLiked(ctx context.Context, postID int64, userID uuid.UUI
 
 	isLiked := s.repo.Postgres.Post.IsLiked(ctx, postID, userID)
 
-	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedPostKey(userID.String(), postID), isLiked, time.Minute); err != nil {
+	if err := s.rdb.Set(ctx, redisrepo.IsLikedPostKey(userID.String(), postID), isLiked, time.Minute).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to set if user(%s) is liked post(%d) in redis: %s", userID.String(), postID, err.Error())
 		return false
 	}
@@ -405,7 +407,7 @@ func (s *postService) Like(ctx context.Context, postID int64, userID uuid.UUID, 
 	}
 
 	// Update "is liked" cache
-	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedPostKey(userID.String(), postID), !unlike, time.Minute); err != nil {
+	if err := s.rdb.Set(ctx, redisrepo.IsLikedPostKey(userID.String(), postID), !unlike, time.Minute).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to delete user(%s) is liked for post(%d) from redis: %s", userID.String(), postID, err.Error())
 		return ErrInternal
 	}
@@ -420,7 +422,7 @@ func (s *postService) Like(ctx context.Context, postID int64, userID uuid.UUID, 
 func (s *postService) updatePostCachedLikes(ctx context.Context, postID int64, delta int64) error {
 	likesKey := redisrepo.PostLikesKey(postID)
 
-	if err := s.repo.Redis.Default.IncrBy(ctx, likesKey, delta).Err(); err != nil {
+	if err := s.rdb.IncrBy(ctx, likesKey, delta).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to increment key(%s) in redis: %s", likesKey, err.Error())
 		return ErrInternal
 	}
@@ -429,7 +431,7 @@ func (s *postService) updatePostCachedLikes(ctx context.Context, postID int64, d
 }
 
 func (s *postService) postsBatchLikesUpdate(ctx context.Context) error {
-	postKeys, err := s.repo.Redis.Default.Keys(ctx, redisrepo.POST_LIKES_KEY_PATTERN).Result()
+	postKeys, err := s.rdb.Keys(ctx, redisrepo.POST_LIKES_KEY_PATTERN).Result()
 	if err != nil && err != redis.Nil {
 		return fmt.Errorf("failed to get keys with pattern(%s) from redis: %s", redisrepo.POST_LIKES_KEY_PATTERN, err.Error())
 	}
@@ -445,7 +447,7 @@ func (s *postService) postsBatchLikesUpdate(ctx context.Context) error {
 		}
 
 		// Getting post's cached likes
-		n, err := s.repo.Redis.Default.Get(ctx, postKey).Int64()
+		n, err := s.rdb.Get(ctx, postKey).Int64()
 		if err != nil && err != redis.Nil {
 			return fmt.Errorf("failed to get post(%d) cached likes from redis: %s", postID, err.Error())
 		}
@@ -457,7 +459,7 @@ func (s *postService) postsBatchLikesUpdate(ctx context.Context) error {
 			return fmt.Errorf("failed to incr post(%d) likes by(%d): %s", postID, n, err.Error())
 		}
 
-		if err := s.repo.Redis.Default.Del(ctx, postKey).Err(); err != nil {
+		if err := s.rdb.Del(ctx, postKey).Err(); err != nil {
 			return fmt.Errorf("failed to delete post(%d) likes from redis: %s", postID, err.Error())
 		}
 	}
@@ -470,7 +472,7 @@ func (s *postService) GetTrending(ctx context.Context, hours, limit int) ([]*mod
 		hours = 24 * 7
 	}
 
-	postsCache, err := redisrepo.GetMany[model.FullPost](s.repo.Redis.Default, ctx, redisrepo.TrendingPostsKey(limit))
+	postsCache, err := redisrepo.GetMany[model.FullPost](s.rdb, ctx, redisrepo.TrendingPostsKey(limit))
 	if err == nil {
 		return postsCache, nil
 	}
@@ -485,7 +487,7 @@ func (s *postService) GetTrending(ctx context.Context, hours, limit int) ([]*mod
 		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.TrendingPostsKey(limit), posts, time.Duration(hours * int(time.Hour))); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, redisrepo.TrendingPostsKey(limit), posts, time.Duration(hours * int(time.Hour))); err != nil {
 		s.logger.Sugar().Errorf("failed to set trending posts for limit(%d) in redis cache: %s", limit, err.Error())
 		return nil, ErrInternal
 	}
@@ -494,7 +496,7 @@ func (s *postService) GetTrending(ctx context.Context, hours, limit int) ([]*mod
 }
 
 func (s *postService) SearchByTitle(ctx context.Context, title string, limit, offset int) ([]*model.FullPost, error) {
-	resultCache, err := redisrepo.GetMany[model.FullPost](s.repo.Redis.Default, ctx, redisrepo.SearchPostsResultByTitleKey(title, limit, offset))
+	resultCache, err := redisrepo.GetMany[model.FullPost](s.rdb, ctx, redisrepo.SearchPostsResultByTitleKey(title, limit, offset))
 	if err == nil {
 		return resultCache, nil
 	}
@@ -509,7 +511,7 @@ func (s *postService) SearchByTitle(ctx context.Context, title string, limit, of
 		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.SearchPostsResultByTitleKey(title, limit, offset), result, time.Minute); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, redisrepo.SearchPostsResultByTitleKey(title, limit, offset), result, time.Minute); err != nil {
 		s.logger.Sugar().Errorf("failed to set posts search result by title(%s) in redis: %s", title, err.Error())
 		return nil, ErrInternal
 	}

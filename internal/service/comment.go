@@ -18,10 +18,11 @@ import (
 type commentService struct {
 	logger *zap.Logger
 	repo *repository.Repository
+	rdb *redis.Client
 	scheduler gocron.Scheduler
 }
 
-func newCommentService(logger *zap.Logger, repo *repository.Repository) Comment {
+func newCommentService(logger *zap.Logger, repo *repository.Repository, rdb *redis.Client) Comment {
 	scheduler, err := gocron.NewScheduler()
 	if err != nil {
 		panic(err)
@@ -30,6 +31,7 @@ func newCommentService(logger *zap.Logger, repo *repository.Repository) Comment 
 	return &commentService{
 		logger: logger,
 		repo: repo,
+		rdb: rdb,
 		scheduler: scheduler,
 	}
 }
@@ -54,7 +56,7 @@ func (s *commentService) Create(ctx context.Context, authorID uuid.UUID, dto dto
 func (s *commentService) FindPostComments(ctx context.Context, postID int64, limit int, offset int) ([]*model.FullComment, error) {
 	maxLimit(&limit)
 
-	commentsCache, err := redisrepo.GetMany[model.FullComment](s.repo.Redis.Default, ctx, redisrepo.PostCommentsKey(postID, limit, offset))
+	commentsCache, err := redisrepo.GetMany[model.FullComment](s.rdb, ctx, redisrepo.PostCommentsKey(postID, limit, offset))
 	if err == nil {
 		return commentsCache, nil
 	}
@@ -69,7 +71,7 @@ func (s *commentService) FindPostComments(ctx context.Context, postID int64, lim
 		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.PostCommentsKey(postID, limit, offset), comments, time.Minute); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, redisrepo.PostCommentsKey(postID, limit, offset), comments, time.Minute); err != nil {
 		s.logger.Sugar().Errorf("failed to set post(%d) comments in redis: %s", postID, err.Error())
 		return nil, ErrInternal
 	}
@@ -80,7 +82,7 @@ func (s *commentService) FindPostComments(ctx context.Context, postID int64, lim
 func (s *commentService) FindCommentReplies(ctx context.Context, postID int64, commentID int64, limit int, offset int) ([]*model.FullComment, error) {
 	maxLimit(&limit)
 
-	repliesCache, err := redisrepo.GetMany[model.FullComment](s.repo.Redis.Default, ctx, redisrepo.CommentRepliesKey(postID, commentID, limit, offset))
+	repliesCache, err := redisrepo.GetMany[model.FullComment](s.rdb, ctx, redisrepo.CommentRepliesKey(postID, commentID, limit, offset))
 	if err == nil {
 		return repliesCache, nil
 	}
@@ -95,7 +97,7 @@ func (s *commentService) FindCommentReplies(ctx context.Context, postID int64, c
 		return nil, ErrInternal
 	}
 
-	if err := s.repo.Redis.Default.SetJSON(ctx, redisrepo.CommentRepliesKey(postID, commentID, limit, offset), replies, time.Minute); err != nil {
+	if err := redisrepo.SetJSON(s.rdb, ctx, redisrepo.CommentRepliesKey(postID, commentID, limit, offset), replies, time.Minute); err != nil {
 		s.logger.Sugar().Errorf("failed to set comment(%d) replies in redis: %s", commentID, err.Error())
 		return nil, ErrInternal
 	}
@@ -129,7 +131,7 @@ func (s *commentService) Like(ctx context.Context, commentID int64, userID uuid.
 	}
 
 	// Update "is liked" cache
-	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedCommentKey(userID.String(), commentID), !unlike, time.Minute); err != nil {
+	if err := s.rdb.Set(ctx, redisrepo.IsLikedCommentKey(userID.String(), commentID), !unlike, time.Minute).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to set user(%s) is liked for comment(%d) in redis: %s", userID.String(), commentID, err.Error())
 		return ErrInternal
 	}
@@ -142,7 +144,7 @@ func (s *commentService) Like(ctx context.Context, commentID int64, userID uuid.
 }
 
 func (s *commentService) IsLiked(ctx context.Context, commentID int64, userID uuid.UUID) bool {
-	isLikedCache, err := s.repo.Redis.Default.Get(ctx, redisrepo.IsLikedCommentKey(userID.String(), commentID)).Bool()
+	isLikedCache, err := s.rdb.Get(ctx, redisrepo.IsLikedCommentKey(userID.String(), commentID)).Bool()
 	if err == nil {
 		return isLikedCache
 	}
@@ -153,7 +155,7 @@ func (s *commentService) IsLiked(ctx context.Context, commentID int64, userID uu
 
 	isLiked := s.repo.Postgres.Comment.IsLiked(ctx, commentID, userID)
 
-	if err := s.repo.Redis.Default.Set(ctx, redisrepo.IsLikedCommentKey(userID.String(), commentID), isLiked, time.Minute); err != nil {
+	if err := s.rdb.Set(ctx, redisrepo.IsLikedCommentKey(userID.String(), commentID), isLiked, time.Minute).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to set user(%s) is liked comment(%d) value in redis: %s", userID.String(), commentID, err.Error())
 		return false
 	}
@@ -164,7 +166,7 @@ func (s *commentService) IsLiked(ctx context.Context, commentID int64, userID uu
 func (s *commentService) updateCommentCachedLikes(ctx context.Context, commentID int64, delta int64) error {
 	key := redisrepo.CommentLikesKey(commentID)
 
-	if err := s.repo.Redis.Default.IncrBy(ctx, key, delta).Err(); err != nil {
+	if err := s.rdb.IncrBy(ctx, key, delta).Err(); err != nil {
 		s.logger.Sugar().Errorf("failed to increment key(%s) in redis: %s", key, err.Error())
 		return ErrInternal
 	}
@@ -173,7 +175,7 @@ func (s *commentService) updateCommentCachedLikes(ctx context.Context, commentID
 }
 
 func (s *commentService) commentsBatchLikesUpdate(ctx context.Context) error {
-	commentKeys, err := s.repo.Redis.Default.Keys(ctx, redisrepo.COMMENT_LIKES_KEY_PATTERN).Result()
+	commentKeys, err := s.rdb.Keys(ctx, redisrepo.COMMENT_LIKES_KEY_PATTERN).Result()
 	if err != nil && err != redis.Nil {
 		return fmt.Errorf("failed to get keys with pattern(%s) from redis: %s", redisrepo.COMMENT_LIKES_KEY_PATTERN, err.Error())
 	}
@@ -189,7 +191,7 @@ func (s *commentService) commentsBatchLikesUpdate(ctx context.Context) error {
 		}
 
 		// Get comment's cached likes
-		n, err := s.repo.Redis.Default.Get(ctx, commentKey).Int64()
+		n, err := s.rdb.Get(ctx, commentKey).Int64()
 		if err != nil && err != redis.Nil {
 			return fmt.Errorf("failed to get comment(%d) cached likes from redis: %s", commentID, err.Error())
 		}
@@ -201,7 +203,7 @@ func (s *commentService) commentsBatchLikesUpdate(ctx context.Context) error {
 			return fmt.Errorf("failed to incr comment(%d) likes by(%d): %s", commentID, n, err.Error())
 		}
 
-		if err := s.repo.Redis.Default.Del(ctx, commentKey).Err(); err != nil {
+		if err := s.rdb.Del(ctx, commentKey).Err(); err != nil {
 			return fmt.Errorf("failed to delete comment(%d) likes from redis: %s", commentID, err.Error())
 		}
 	}
