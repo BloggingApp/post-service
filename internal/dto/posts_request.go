@@ -25,5 +25,5 @@ type EditPostRequest struct {
 type UpdatePostValidationStatusRequest struct {
 	PostID    int64  `json:"post_id" binding:"required"`
 	Validated bool   `json:"validated" binding:"required"`
-	StatusMsg string `json:"status_msg" binding:"required,max=120"`
+	StatusMsg string `json:"status_msg" binding:"required,max=1024"`
 }
