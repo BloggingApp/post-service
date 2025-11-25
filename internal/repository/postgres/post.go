@@ -846,7 +846,7 @@ func (r *postRepo) SearchByTitle(ctx context.Context, title string, limit, offse
 	}
 	defer rows.Close()
 
-		postsMap := make(map[int64]*model.FullPost)
+	postsMap := make(map[int64]*model.FullPost)
 	for rows.Next() {
 		var (
 			id int64
